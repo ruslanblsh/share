@@ -77,13 +77,38 @@ textarea,input[type=text]{
 }
 textarea:focus,input:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)}
 textarea{min-height:104px}
+.toolbar{
+  display:flex;gap:2px;align-items:center;padding:4px;background:var(--paper);
+  border:1px solid var(--line);border-bottom:0;border-radius:8px 8px 0 0;
+}
+.toolbar button{
+  min-width:28px;height:26px;border:0;background:transparent;border-radius:5px;cursor:pointer;
+  font-family:var(--sans);font-size:14px;color:var(--muted);padding:0 6px;
+}
+.toolbar button:hover{background:var(--surface);color:var(--ink)}
+.toolbar button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.toolbar .b{font-weight:700}
+.toolbar .i{font-style:italic}
+.toolbar .u{text-decoration:underline}
+.toolbar .sep{flex:1}
+.toolbar .plain{font-size:12px}
+.editor{
+  width:100%;min-height:104px;font-family:var(--sans);font-size:15px;color:var(--ink);
+  background:var(--surface);border:1px solid var(--line);border-radius:0 0 8px 8px;
+  padding:11px 12px;overflow-wrap:anywhere;
+}
+.editor:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)}
+.editor:empty:before{content:attr(data-ph);color:var(--muted)}
+.rich p,.rich div{margin:0 0 .55em}
+.rich p:last-child,.rich div:last-child{margin-bottom:0}
+.rich ul,.rich ol{margin:.2em 0 .55em;padding-left:22px}
+.rich a{color:var(--accent)}
 .block{position:relative;margin-bottom:10px}
 .block .kill{
-  position:absolute;top:8px;right:8px;width:24px;height:24px;border-radius:6px;
-  border:1px solid var(--line-soft);background:var(--surface);color:var(--muted);
-  cursor:pointer;font-size:15px;line-height:1;display:grid;place-items:center;
+  width:26px;height:26px;border-radius:5px;border:0;background:transparent;color:var(--muted);
+  cursor:pointer;font-size:16px;line-height:1;display:grid;place-items:center;
 }
-.block .kill:hover{color:var(--warn);border-color:var(--warn)}
+.block .kill:hover{color:var(--warn);background:var(--surface)}
 
 /* buttons */
 .btn{
@@ -139,9 +164,9 @@ textarea{min-height:104px}
   border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);
 }
 .item{border:1px solid var(--line-soft);border-radius:8px;padding:14px;margin-bottom:10px;background:var(--surface)}
-.item pre{
-  margin:0 0 12px;font-family:var(--sans);font-size:15px;white-space:pre-wrap;word-wrap:break-word;
-  max-height:280px;overflow:auto;
+.item .rich{
+  margin:0 0 12px;font-size:15px;word-wrap:break-word;
+  max-height:320px;overflow:auto;
 }
 .item img{max-width:100%;border-radius:6px;display:block;margin-bottom:12px;border:1px solid var(--line-soft)}
 .status{font-size:14px;color:var(--muted);padding:6px 0}
@@ -242,7 +267,7 @@ a{color:var(--accent)}
    например: https://garna-share-default-rtdb.europe-west1.firebasedatabase.app
    Если оставить пустым, сайт спросит адрес при первом открытии.
 ----------------------------------------------------------------*/
-const DB_URL = "https://garna-share-default-rtdb.europe-west1.firebasedatabase.app/";
+const DB_URL = "";
 
 const ALPHABET = "ACEFHJKLMNPRTUVWXY34679";
 const CODE_LEN = 5;
@@ -279,27 +304,126 @@ function showView(v){
 }
 
 /* ---------- text blocks ---------- */
-function addTextBlock(val){
+function addTextBlock(html){
   const wrap = document.createElement("div");
   wrap.className = "block";
-  const ta = document.createElement("textarea");
-  ta.placeholder = "текст, который нужно перенести";
-  ta.value = val || "";
-  ta.addEventListener("input", updateMeta);
+
+  const bar = document.createElement("div");
+  bar.className = "toolbar";
+  const mk = (cls, label, title, cmd) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = cls; b.textContent = label; b.title = title;
+    b.onmousedown = e => e.preventDefault();          // не терять выделение
+    b.onclick = () => { ed.focus(); document.execCommand(cmd, false, null); updateMeta(); };
+    return b;
+  };
+  const ed = document.createElement("div");
+  ed.className = "editor rich";
+  ed.contentEditable = "true";
+  ed.setAttribute("data-ph", "текст, который нужно перенести");
+  ed.innerHTML = html || "";
+
+  bar.appendChild(mk("b", "B", "Жирный (Ctrl+B)", "bold"));
+  bar.appendChild(mk("i", "I", "Курсив (Ctrl+I)", "italic"));
+  bar.appendChild(mk("u", "U", "Подчёркнутый (Ctrl+U)", "underline"));
+  bar.appendChild(mk("plain", "убрать формат", "Снять форматирование с выделенного", "removeFormat"));
+  const sep = document.createElement("div"); sep.className = "sep"; bar.appendChild(sep);
+
   const kill = document.createElement("button");
   kill.className = "kill"; kill.type = "button"; kill.textContent = "×"; kill.title = "удалить блок";
   kill.onclick = () => {
     const all = document.querySelectorAll("#textBlocks .block");
-    if(all.length === 1){ ta.value = ""; } else { wrap.remove(); }
+    if(all.length === 1){ ed.innerHTML = ""; } else { wrap.remove(); }
     updateMeta();
   };
-  wrap.appendChild(ta); wrap.appendChild(kill);
+  bar.appendChild(kill);
+
+  ed.addEventListener("input", updateMeta);
+  ed.addEventListener("paste", e => {
+    const cd = e.clipboardData;
+    if(!cd) return;
+    if([...(cd.files || [])].some(f => f.type.startsWith("image/"))) return;  // картинки ловит общий обработчик
+    e.preventDefault();
+    const raw = cd.getData("text/html");
+    const clean = raw ? sanitizeHTML(raw) : escapeHTML(cd.getData("text/plain")).replace(/\r?\n/g, "<br>");
+    document.execCommand("insertHTML", false, clean);
+    updateMeta();
+  });
+
+  wrap.appendChild(bar); wrap.appendChild(ed);
   document.getElementById("textBlocks").appendChild(wrap);
-  return ta;
+  return ed;
 }
+
 function getTexts(){
-  return [...document.querySelectorAll("#textBlocks textarea")]
-    .map(t => t.value).filter(v => v.trim().length);
+  return [...document.querySelectorAll("#textBlocks .editor")]
+    .map(ed => ({ html: ed.innerHTML, text: htmlToText(ed.innerHTML) }))
+    .filter(t => t.text.trim().length);
+}
+
+/* ---------- html: чистка и конвертация ---------- */
+const KEEP_TAG = {
+  B:"strong", STRONG:"strong", I:"em", EM:"em", U:"u", S:"s", STRIKE:"s", DEL:"s",
+  P:"p", DIV:"div", BR:"br", UL:"ul", OL:"ol", LI:"li", A:"a",
+  H1:"p", H2:"p", H3:"p", H4:"p", H5:"p", H6:"p", BLOCKQUOTE:"p"
+};
+const DROP_TAG = new Set(["STYLE","SCRIPT","HEAD","META","LINK","TITLE","IMG","SVG","IFRAME","OBJECT","EMBED","NOSCRIPT","BUTTON","INPUT"]);
+
+function escapeHTML(s){
+  return String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
+}
+
+function sanitizeHTML(html){
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const out = document.createElement("div");
+  copyClean(doc.body, out);
+  out.innerHTML = out.innerHTML
+    .replace(/\u00A0/g, " ")
+    .replace(/<p>\s*<\/p>/g, "")
+    .replace(/(<br\s*\/?>\s*){3,}/g, "<br><br>");
+  return out.innerHTML;
+}
+
+function copyClean(src, dest){
+  for(const node of [...src.childNodes]){
+    if(node.nodeType === 3){ dest.appendChild(document.createTextNode(node.nodeValue)); continue; }
+    if(node.nodeType !== 1) continue;
+    const tag = node.tagName.toUpperCase();
+    if(DROP_TAG.has(tag) || tag.includes(":")) continue;   // <o:p>, <v:shape> и прочий мусор Word
+
+    const style = node.getAttribute("style") || "";
+    const chain = [];
+    const base = KEEP_TAG[tag];
+    if(base) chain.push(base);
+    if(/font-weight\s*:\s*(bold|[6-9]00)/i.test(style) && !chain.includes("strong")) chain.push("strong");
+    if(/font-style\s*:\s*italic/i.test(style) && !chain.includes("em")) chain.push("em");
+    if(/text-decoration[^;]*underline/i.test(style) && !chain.includes("u")) chain.push("u");
+    if(/text-decoration[^;]*line-through/i.test(style) && !chain.includes("s")) chain.push("s");
+
+    let target = dest;
+    for(const t of chain){
+      if(t === "a"){
+        const href = node.getAttribute("href") || "";
+        if(!/^https?:\/\//i.test(href)) continue;
+        const a = document.createElement("a");
+        a.href = href; a.target = "_blank"; a.rel = "noopener";
+        target.appendChild(a); target = a;
+        continue;
+      }
+      const el = document.createElement(t);
+      target.appendChild(el);
+      if(t !== "br") target = el;
+    }
+    if(base !== "br") copyClean(node, target);
+  }
+}
+
+function htmlToText(html){
+  const d = document.createElement("div");
+  d.innerHTML = html;
+  d.querySelectorAll("br").forEach(b => b.replaceWith("\n"));
+  d.querySelectorAll("p,div,li,tr").forEach(b => b.append("\n"));
+  return d.textContent.replace(/\u00A0/g, " ").replace(/\n{3,}/g, "\n\n").replace(/[ \t]+\n/g, "\n").trim();
 }
 
 /* ---------- images ---------- */
@@ -381,7 +505,7 @@ function renderThumbs(){
 
 /* ---------- size meter ---------- */
 function payloadSize(){
-  const t = getTexts().join("").length;
+  const t = getTexts().reduce((s, x) => s + x.html.length, 0);
   const i = images.reduce((s, im) => s + im.dataUrl.length, 0);
   return t + i;
 }
@@ -420,7 +544,7 @@ async function doSave(){
   st.className = "status"; st.textContent = "";
 
   const items = [
-    ...texts.map(v => ({ type: "text", value: v })),
+    ...texts.map(t => ({ type: "text", html: t.html, value: t.text })),
     ...images.map(im => ({ type: "image", name: im.name, value: im.dataUrl }))
   ];
   const code = makeCode();
@@ -512,12 +636,20 @@ function renderItems(items, createdAt){
     const card = document.createElement("div");
     card.className = "item";
     if(it.type === "text"){
-      const pre = document.createElement("pre");
-      pre.textContent = it.value;
-      const b = document.createElement("button");
-      b.className = "btn primary"; b.textContent = "Копировать текст";
-      b.onclick = () => copyText(it.value, b, "Скопировано");
-      card.appendChild(pre); card.appendChild(b);
+      const html = sanitizeHTML(it.html || escapeHTML(it.value || "").replace(/\r?\n/g, "<br>"));
+      const plain = it.value || htmlToText(html);
+      const body = document.createElement("div");
+      body.className = "rich";
+      body.innerHTML = html;
+      const row = document.createElement("div"); row.className = "row";
+      const b1 = document.createElement("button");
+      b1.className = "btn primary"; b1.textContent = "Копировать с форматированием";
+      b1.onclick = () => copyRich(html, plain, b1);
+      const b2 = document.createElement("button");
+      b2.className = "btn"; b2.textContent = "Только текст";
+      b2.onclick = () => copyText(plain, b2, "Скопировано");
+      row.appendChild(b1); row.appendChild(b2);
+      card.appendChild(body); card.appendChild(row);
     }else{
       const img = document.createElement("img");
       img.src = it.value; img.alt = it.name || "изображение " + (idx + 1);
@@ -557,9 +689,12 @@ async function dropClip(code, btn){
 
 /* ---------- clipboard ---------- */
 function flash(btn, label){
-  const old = btn.textContent;
+  const old = btn.textContent, wasPrimary = btn.classList.contains("primary");
   btn.textContent = label; btn.classList.add("done"); btn.classList.remove("primary");
-  setTimeout(() => { btn.textContent = old; btn.classList.remove("done"); btn.classList.add("primary"); }, 1400);
+  setTimeout(() => {
+    btn.textContent = old; btn.classList.remove("done");
+    if(wasPrimary) btn.classList.add("primary");
+  }, 1400);
 }
 async function copyText(text, btn, label){
   try{
@@ -573,6 +708,18 @@ async function copyText(text, btn, label){
     if(!ok){ btn.textContent = "Не вышло - выдели вручную"; return; }
   }
   flash(btn, label);
+}
+async function copyRich(html, text, btn){
+  try{
+    await navigator.clipboard.write([new ClipboardItem({
+      "text/html": new Blob([html], { type: "text/html" }),
+      "text/plain": new Blob([text], { type: "text/plain" })
+    })]);
+    flash(btn, "Скопировано с форматированием");
+  }catch(e){
+    console.error(e);
+    await copyText(text, btn, "Скопировано без форматирования");
+  }
 }
 async function copyImage(dataUrl, btn){
   try{
@@ -623,6 +770,7 @@ function renderRecent(){
 }
 
 /* ---------- init ---------- */
+try{ document.execCommand("defaultParagraphSeparator", false, "p"); }catch(e){}
 addTextBlock("");
 renderRecent();
 updateMeta();
