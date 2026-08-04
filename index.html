@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Garna Share - буфер обмена между машинами</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#E9EDF2;
+  --surface:#FFFFFF;
+  --ink:#0F161C;
+  --muted:#6A7683;
+  --line:#C7D0DA;
+  --line-soft:#DFE5EC;
+  --accent:#1F4BE0;
+  --accent-ink:#FFFFFF;
+  --ok:#0E7A57;
+  --warn:#B4530C;
+  --sans:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --r:10px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--sans);
+  font-size:15px;
+  line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+  padding:24px 16px 64px;
+}
+.wrap{max-width:680px;margin:0 auto}
+
+/* header */
+header{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+.mark{width:30px;height:30px;flex:none;border-radius:8px;background:var(--accent);display:grid;place-items:center}
+.mark svg{display:block}
+#logo{height:26px;width:auto;display:block}
+.brand{font-weight:600;letter-spacing:-.01em;font-size:18px}
+.brand span{color:var(--muted);font-weight:400}
+.tagline{
+  font-family:var(--mono);font-size:12px;color:var(--muted);
+  letter-spacing:.02em;margin:0 0 22px 42px;
+}
+.tagline b{color:var(--ink);font-weight:500}
+
+/* tabs */
+.tabs{display:flex;gap:2px;background:var(--line-soft);padding:3px;border-radius:var(--r);margin-bottom:18px}
+.tabs button{
+  flex:1;appearance:none;border:0;background:transparent;cursor:pointer;
+  font-family:var(--sans);font-size:14px;font-weight:500;color:var(--muted);
+  padding:9px 8px;border-radius:8px;transition:background .12s,color .12s;
+}
+.tabs button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(15,22,28,.08)}
+.tabs button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+
+.card{
+  background:var(--surface);border:1px solid var(--line-soft);border-radius:var(--r);
+  padding:18px;margin-bottom:14px;
+}
+.card h2{
+  font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--muted);margin:0 0 12px;
+}
+.hidden{display:none !important}
+
+textarea,input[type=text]{
+  width:100%;font-family:var(--sans);font-size:15px;color:var(--ink);
+  background:var(--surface);border:1px solid var(--line);border-radius:8px;
+  padding:11px 12px;resize:vertical;
+}
+textarea:focus,input:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)}
+textarea{min-height:104px}
+.block{position:relative;margin-bottom:10px}
+.block .kill{
+  position:absolute;top:8px;right:8px;width:24px;height:24px;border-radius:6px;
+  border:1px solid var(--line-soft);background:var(--surface);color:var(--muted);
+  cursor:pointer;font-size:15px;line-height:1;display:grid;place-items:center;
+}
+.block .kill:hover{color:var(--warn);border-color:var(--warn)}
+
+/* buttons */
+.btn{
+  appearance:none;font-family:var(--sans);font-size:14px;font-weight:500;
+  border-radius:8px;padding:9px 14px;cursor:pointer;
+  display:inline-block;text-decoration:none;line-height:1.4;
+  border:1px solid var(--line);background:var(--surface);color:var(--ink);
+  transition:background .12s,border-color .12s,color .12s;
+}
+.btn:hover{border-color:var(--ink)}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{background:#173CB8;border-color:#173CB8}
+.btn.big{width:100%;padding:14px;font-size:16px}
+.btn.ghost{background:transparent}
+.btn:disabled{opacity:.45;cursor:default}
+.btn.done{color:var(--ok);border-color:var(--ok)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+/* dropzone */
+.drop{
+  border:1px dashed var(--line);border-radius:8px;padding:22px 12px;text-align:center;
+  color:var(--muted);font-size:14px;cursor:pointer;transition:border-color .12s,background .12s;
+}
+.drop:hover,.drop.over{border-color:var(--accent);background:#F4F7FF;color:var(--ink)}
+.thumbs{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
+.thumb{position:relative;width:92px;height:92px;border-radius:8px;overflow:hidden;border:1px solid var(--line-soft);background:var(--paper)}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb .kill{
+  position:absolute;top:4px;right:4px;width:20px;height:20px;border-radius:5px;border:0;
+  background:rgba(15,22,28,.72);color:#fff;cursor:pointer;font-size:13px;line-height:1;display:grid;place-items:center;
+}
+
+.meta{font-family:var(--mono);font-size:11.5px;color:var(--muted);letter-spacing:.02em}
+.meta.warn{color:var(--warn)}
+
+/* code display - signature element */
+.codebox{text-align:center;padding:26px 18px}
+.codebox .lbl{font-family:var(--mono);font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.cells{display:flex;justify-content:center;gap:8px;margin:14px 0 4px}
+.cell{
+  width:52px;height:66px;display:grid;place-items:center;
+  font-family:var(--mono);font-size:32px;font-weight:600;
+  border:1px solid var(--line);border-bottom:3px solid var(--accent);border-radius:8px;
+  background:var(--paper);
+}
+@media (max-width:420px){.cell{width:42px;height:56px;font-size:26px}}
+
+/* receive */
+.codeinput{
+  width:100%;font-family:var(--mono);font-size:30px;font-weight:600;text-align:center;
+  letter-spacing:.22em;text-transform:uppercase;padding:14px 12px;
+  border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);
+}
+.item{border:1px solid var(--line-soft);border-radius:8px;padding:14px;margin-bottom:10px;background:var(--surface)}
+.item pre{
+  margin:0 0 12px;font-family:var(--sans);font-size:15px;white-space:pre-wrap;word-wrap:break-word;
+  max-height:280px;overflow:auto;
+}
+.item img{max-width:100%;border-radius:6px;display:block;margin-bottom:12px;border:1px solid var(--line-soft)}
+.status{font-size:14px;color:var(--muted);padding:6px 0}
+.status.err{color:var(--warn)}
+.recent{margin-top:12px}
+.chip{
+  font-family:var(--mono);font-size:13px;padding:5px 10px;border-radius:6px;
+  border:1px solid var(--line-soft);background:var(--surface);cursor:pointer;color:var(--ink);
+}
+.chip:hover{border-color:var(--accent);color:var(--accent)}
+footer{margin-top:26px;font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center}
+a{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <img id="logo" src="logo.svg" alt="Garna" onerror="this.remove();document.getElementById('fallbackMark').hidden=false;document.getElementById('fallbackName').hidden=false">
+    <div class="mark" id="fallbackMark" hidden>
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8h9M8 4.5 11.5 8 8 11.5" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M13.5 3v10" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>
+    </div>
+    <div class="brand" id="fallbackName" hidden>garna <span>share</span></div>
+  </header>
+  <p class="tagline">твой компьютер <b>→</b> cloud browser в getsales</p>
+
+  <div class="tabs" role="tablist">
+    <button role="tab" id="tabSend" aria-selected="true" onclick="showView('send')">Отправить</button>
+    <button role="tab" id="tabGet" aria-selected="false" onclick="showView('get')">Получить</button>
+  </div>
+
+  <!-- ================= SETUP ================= -->
+  <div id="setupView" class="card hidden">
+    <h2>Первый запуск</h2>
+    <p style="margin-top:0">Вставь адрес Realtime Database из Firebase. Сохранится в этом браузере, спрашивать больше не будет.</p>
+    <input type="text" id="dbInput" placeholder="https://имя-проекта-default-rtdb.europe-west1.firebasedatabase.app">
+    <div class="row" style="margin-top:10px">
+      <button class="btn primary" onclick="saveDb()">Сохранить адрес</button>
+    </div>
+  </div>
+
+  <!-- ================= SEND ================= -->
+  <div id="sendView">
+    <div class="card">
+      <h2>Текст</h2>
+      <div id="textBlocks"></div>
+      <button class="btn ghost" onclick="addTextBlock('')">+ ещё блок текста</button>
+    </div>
+
+    <div class="card">
+      <h2>Изображения</h2>
+      <div class="drop" id="drop" tabindex="0" role="button">
+        перетащи файлы, нажми для выбора или просто вставь из буфера (Ctrl+V)
+      </div>
+      <input type="file" id="picker" accept="image/*" multiple class="hidden">
+      <div class="thumbs" id="thumbs"></div>
+    </div>
+
+    <button class="btn primary big" id="saveBtn" onclick="doSave()">Сохранить в облако</button>
+    <div class="row" style="justify-content:space-between;margin-top:8px">
+      <span class="meta" id="sizeMeta">пусто</span>
+      <button class="btn ghost" style="border:0;padding:4px 0" onclick="resetSend()">очистить всё</button>
+    </div>
+    <div class="status" id="sendStatus"></div>
+  </div>
+
+  <!-- ================= CODE ================= -->
+  <div id="codeView" class="hidden">
+    <div class="card codebox">
+      <div class="lbl">Код пакета</div>
+      <div class="cells" id="codeCells"></div>
+      <div class="meta">введи его во вкладке «Получить» внутри cloud browser</div>
+      <div class="row" style="justify-content:center;margin-top:16px">
+        <button class="btn" id="copyLinkBtn" onclick="copyLink()">Копировать ссылку</button>
+        <button class="btn" onclick="resetSend();showView('send')">Новый пакет</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= GET ================= -->
+  <div id="getView" class="hidden">
+    <div class="card">
+      <h2>Код пакета</h2>
+      <input class="codeinput" id="codeInput" maxlength="5" autocomplete="off" spellcheck="false" placeholder="•••••">
+      <button class="btn primary big" style="margin-top:10px" onclick="doLoad()">Открыть</button>
+      <div class="status" id="getStatus"></div>
+      <div class="recent row" id="recent"></div>
+    </div>
+    <div id="items"></div>
+  </div>
+
+  <footer>внутренний инструмент garna · пакеты лежат в облаке, пока их не удалить</footer>
+</div>
+
+<script>
+/* ---------------------------------------------------------------
+   КОНФИГ. Вставь сюда адрес своей Realtime Database из Firebase,
+   например: https://garna-share-default-rtdb.europe-west1.firebasedatabase.app
+   Если оставить пустым, сайт спросит адрес при первом открытии.
+----------------------------------------------------------------*/
+const DB_URL = "https://garna-share-default-rtdb.europe-west1.firebasedatabase.app/";
+
+const ALPHABET = "ACEFHJKLMNPRTUVWXY34679";
+const CODE_LEN = 5;
+const MAX_EDGE = 1920;
+const SOFT_LIMIT = 9 * 1024 * 1024;
+
+let images = [];      // {id, dataUrl, name}
+let currentCode = "";
+
+/* ---------- storage config ---------- */
+function db(){
+  return (DB_URL || localStorage.getItem("garna_share_db") || "").replace(/\/+$/,"");
+}
+function saveDb(){
+  const v = document.getElementById("dbInput").value.trim().replace(/\/+$/,"");
+  if(!/^https:\/\/.+/.test(v)){ alert("Адрес должен начинаться с https://"); return; }
+  localStorage.setItem("garna_share_db", v);
+  document.getElementById("setupView").classList.add("hidden");
+  showView(currentView);
+}
+
+/* ---------- views ---------- */
+let currentView = "send";
+function showView(v){
+  currentView = v;
+  const needSetup = !db();
+  document.getElementById("setupView").classList.toggle("hidden", !needSetup);
+  document.getElementById("sendView").classList.toggle("hidden", needSetup || v !== "send" || !!currentCode);
+  document.getElementById("codeView").classList.toggle("hidden", needSetup || v !== "send" || !currentCode);
+  document.getElementById("getView").classList.toggle("hidden", needSetup || v !== "get");
+  document.getElementById("tabSend").setAttribute("aria-selected", v === "send");
+  document.getElementById("tabGet").setAttribute("aria-selected", v === "get");
+  if(v === "get") setTimeout(()=>document.getElementById("codeInput").focus(), 30);
+}
+
+/* ---------- text blocks ---------- */
+function addTextBlock(val){
+  const wrap = document.createElement("div");
+  wrap.className = "block";
+  const ta = document.createElement("textarea");
+  ta.placeholder = "текст, который нужно перенести";
+  ta.value = val || "";
+  ta.addEventListener("input", updateMeta);
+  const kill = document.createElement("button");
+  kill.className = "kill"; kill.type = "button"; kill.textContent = "×"; kill.title = "удалить блок";
+  kill.onclick = () => {
+    const all = document.querySelectorAll("#textBlocks .block");
+    if(all.length === 1){ ta.value = ""; } else { wrap.remove(); }
+    updateMeta();
+  };
+  wrap.appendChild(ta); wrap.appendChild(kill);
+  document.getElementById("textBlocks").appendChild(wrap);
+  return ta;
+}
+function getTexts(){
+  return [...document.querySelectorAll("#textBlocks textarea")]
+    .map(t => t.value).filter(v => v.trim().length);
+}
+
+/* ---------- images ---------- */
+const drop = document.getElementById("drop");
+const picker = document.getElementById("picker");
+drop.onclick = () => picker.click();
+drop.onkeydown = e => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); picker.click(); } };
+picker.onchange = e => { addFiles([...e.target.files]); picker.value = ""; };
+["dragenter","dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave","drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", e => addFiles([...e.dataTransfer.files]));
+
+document.addEventListener("paste", e => {
+  if(currentView !== "send" || currentCode) return;
+  const files = [...(e.clipboardData?.files || [])].filter(f => f.type.startsWith("image/"));
+  if(files.length){ e.preventDefault(); addFiles(files); }
+});
+
+async function addFiles(files){
+  for(const f of files){
+    if(!f.type.startsWith("image/")) continue;
+    try{
+      const dataUrl = await prepareImage(f);
+      images.push({ id: Math.random().toString(36).slice(2), dataUrl, name: f.name || "image" });
+    }catch(err){ console.error(err); }
+  }
+  renderThumbs(); updateMeta();
+}
+
+function prepareImage(file){
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onerror = () => reject(new Error("не читается файл"));
+    fr.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("не картинка"));
+      img.onload = () => {
+        const scale = Math.min(1, MAX_EDGE / Math.max(img.width, img.height));
+        if(scale === 1 && file.size < 700 * 1024){ resolve(fr.result); return; }
+        const c = document.createElement("canvas");
+        c.width = Math.round(img.width * scale);
+        c.height = Math.round(img.height * scale);
+        const ctx = c.getContext("2d");
+        ctx.drawImage(img, 0, 0, c.width, c.height);
+        let out = null;
+        if(file.type === "image/png"){
+          out = c.toDataURL("image/png");
+          if(out.length > 1.3 * 1024 * 1024) out = null;
+        }
+        if(!out){
+          const c2 = document.createElement("canvas");
+          c2.width = c.width; c2.height = c.height;
+          const x = c2.getContext("2d");
+          x.fillStyle = "#FFFFFF"; x.fillRect(0, 0, c2.width, c2.height);
+          x.drawImage(c, 0, 0);
+          out = c2.toDataURL("image/jpeg", 0.9);
+        }
+        resolve(out);
+      };
+      img.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+
+function renderThumbs(){
+  const box = document.getElementById("thumbs");
+  box.innerHTML = "";
+  images.forEach(im => {
+    const d = document.createElement("div");
+    d.className = "thumb";
+    const i = document.createElement("img"); i.src = im.dataUrl; i.alt = im.name;
+    const k = document.createElement("button");
+    k.className = "kill"; k.textContent = "×"; k.title = "убрать";
+    k.onclick = () => { images = images.filter(z => z.id !== im.id); renderThumbs(); updateMeta(); };
+    d.appendChild(i); d.appendChild(k); box.appendChild(d);
+  });
+}
+
+/* ---------- size meter ---------- */
+function payloadSize(){
+  const t = getTexts().join("").length;
+  const i = images.reduce((s, im) => s + im.dataUrl.length, 0);
+  return t + i;
+}
+function updateMeta(){
+  const bytes = payloadSize();
+  const el = document.getElementById("sizeMeta");
+  const t = getTexts().length, i = images.length;
+  if(!t && !i){ el.textContent = "пусто"; el.className = "meta"; return; }
+  const mb = (bytes / 1024 / 1024);
+  el.textContent = `${t} текст. блок(ов) · ${i} изобр. · ${mb < 0.1 ? "<0,1" : mb.toFixed(1).replace(".", ",")} МБ`;
+  el.className = bytes > SOFT_LIMIT ? "meta warn" : "meta";
+}
+
+/* ---------- save ---------- */
+function makeCode(){
+  let s = "";
+  const buf = new Uint32Array(CODE_LEN);
+  crypto.getRandomValues(buf);
+  for(let i = 0; i < CODE_LEN; i++) s += ALPHABET[buf[i] % ALPHABET.length];
+  return s;
+}
+
+async function doSave(){
+  const texts = getTexts();
+  const st = document.getElementById("sendStatus");
+  if(!texts.length && !images.length){
+    st.className = "status err"; st.textContent = "Добавь текст или картинку - пока переносить нечего.";
+    return;
+  }
+  if(payloadSize() > SOFT_LIMIT){
+    st.className = "status err"; st.textContent = "Пакет больше 9 МБ. Убери часть картинок.";
+    return;
+  }
+  const btn = document.getElementById("saveBtn");
+  btn.disabled = true; btn.textContent = "Загружаю…";
+  st.className = "status"; st.textContent = "";
+
+  const items = [
+    ...texts.map(v => ({ type: "text", value: v })),
+    ...images.map(im => ({ type: "image", name: im.name, value: im.dataUrl }))
+  ];
+  const code = makeCode();
+  try{
+    const res = await fetch(`${db()}/clips/${code}.json`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ createdAt: Date.now(), items })
+    });
+    if(!res.ok) throw new Error("HTTP " + res.status);
+    currentCode = code;
+    pushRecent(code);
+    renderCode(code);
+    showView("send");
+  }catch(err){
+    st.className = "status err";
+    st.textContent = "Не загрузилось: " + err.message + ". Проверь адрес базы и правила доступа.";
+  }finally{
+    btn.disabled = false; btn.textContent = "Сохранить в облако";
+  }
+}
+
+function renderCode(code){
+  const cells = document.getElementById("codeCells");
+  cells.innerHTML = "";
+  [...code].forEach(ch => {
+    const c = document.createElement("div");
+    c.className = "cell"; c.textContent = ch;
+    cells.appendChild(c);
+  });
+}
+
+function copyLink(){
+  const url = location.origin + location.pathname + "?c=" + currentCode;
+  copyText(url, document.getElementById("copyLinkBtn"), "Ссылка скопирована");
+}
+
+function resetSend(){
+  currentCode = "";
+  images = [];
+  document.getElementById("textBlocks").innerHTML = "";
+  addTextBlock("");
+  renderThumbs(); updateMeta();
+  document.getElementById("sendStatus").textContent = "";
+}
+
+/* ---------- load ---------- */
+const codeInput = document.getElementById("codeInput");
+codeInput.addEventListener("input", () => {
+  codeInput.value = codeInput.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if(codeInput.value.length === CODE_LEN) doLoad();
+});
+codeInput.addEventListener("keydown", e => { if(e.key === "Enter") doLoad(); });
+
+async function doLoad(code){
+  const c = (typeof code === "string" ? code : codeInput.value).toUpperCase().trim();
+  const st = document.getElementById("getStatus");
+  const box = document.getElementById("items");
+  if(c.length !== CODE_LEN){ st.className = "status err"; st.textContent = `Код из ${CODE_LEN} символов.`; return; }
+  codeInput.value = c;
+  st.className = "status"; st.textContent = "Загружаю…";
+  box.innerHTML = "";
+  try{
+    const res = await fetch(`${db()}/clips/${c}.json`);
+    if(!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    if(!data || !data.items){ st.className = "status err"; st.textContent = "Такого кода нет. Проверь символы."; return; }
+    st.textContent = "";
+    pushRecent(c);
+    renderItems(data.items, data.createdAt);
+  }catch(err){
+    st.className = "status err"; st.textContent = "Не открылось: " + err.message;
+  }
+}
+
+function renderItems(items, createdAt){
+  const box = document.getElementById("items");
+  box.innerHTML = "";
+  if(createdAt){
+    const age = Math.floor((Date.now() - createdAt) / 86400000);
+    if(age >= 1){
+      const m = document.createElement("div");
+      m.className = "meta"; m.style.margin = "0 0 10px";
+      m.textContent = `пакет создан ${age} дн. назад`;
+      box.appendChild(m);
+    }
+  }
+  items.forEach((it, idx) => {
+    const card = document.createElement("div");
+    card.className = "item";
+    if(it.type === "text"){
+      const pre = document.createElement("pre");
+      pre.textContent = it.value;
+      const b = document.createElement("button");
+      b.className = "btn primary"; b.textContent = "Копировать текст";
+      b.onclick = () => copyText(it.value, b, "Скопировано");
+      card.appendChild(pre); card.appendChild(b);
+    }else{
+      const img = document.createElement("img");
+      img.src = it.value; img.alt = it.name || "изображение " + (idx + 1);
+      const row = document.createElement("div"); row.className = "row";
+      const b1 = document.createElement("button");
+      b1.className = "btn primary"; b1.textContent = "Копировать картинку";
+      b1.onclick = () => copyImage(it.value, b1);
+      const b2 = document.createElement("a");
+      b2.className = "btn"; b2.textContent = "Скачать";
+      b2.href = it.value; b2.download = it.name || `image-${idx + 1}.png`;
+      row.appendChild(b1); row.appendChild(b2);
+      card.appendChild(img); card.appendChild(row);
+    }
+    box.appendChild(card);
+  });
+  const del = document.createElement("button");
+  del.className = "btn ghost";
+  del.style.cssText = "border:0;color:var(--muted);padding:4px 0";
+  del.textContent = "Удалить пакет из облака";
+  del.onclick = () => dropClip(codeInput.value, del);
+  box.appendChild(del);
+}
+
+async function dropClip(code, btn){
+  btn.disabled = true;
+  try{
+    const res = await fetch(`${db()}/clips/${code}.json`, { method: "DELETE" });
+    if(!res.ok) throw new Error("HTTP " + res.status);
+    document.getElementById("items").innerHTML = "";
+    const st = document.getElementById("getStatus");
+    st.className = "status"; st.textContent = "Пакет удалён.";
+    codeInput.value = "";
+  }catch(e){
+    btn.disabled = false; btn.textContent = "Не удалилось: " + e.message;
+  }
+}
+
+/* ---------- clipboard ---------- */
+function flash(btn, label){
+  const old = btn.textContent;
+  btn.textContent = label; btn.classList.add("done"); btn.classList.remove("primary");
+  setTimeout(() => { btn.textContent = old; btn.classList.remove("done"); btn.classList.add("primary"); }, 1400);
+}
+async function copyText(text, btn, label){
+  try{
+    await navigator.clipboard.writeText(text);
+  }catch(e){
+    const ta = document.createElement("textarea");
+    ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    const ok = document.execCommand("copy");
+    ta.remove();
+    if(!ok){ btn.textContent = "Не вышло - выдели вручную"; return; }
+  }
+  flash(btn, label);
+}
+async function copyImage(dataUrl, btn){
+  try{
+    const blob = await dataUrlToPng(dataUrl);
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+    flash(btn, "Картинка в буфере");
+  }catch(e){
+    btn.textContent = "Буфер недоступен - жми «Скачать»";
+    btn.classList.remove("primary");
+    console.error(e);
+  }
+}
+function dataUrlToPng(dataUrl){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onerror = () => reject(new Error("bad image"));
+    img.onload = () => {
+      const c = document.createElement("canvas");
+      c.width = img.naturalWidth; c.height = img.naturalHeight;
+      c.getContext("2d").drawImage(img, 0, 0);
+      c.toBlob(b => b ? resolve(b) : reject(new Error("no blob")), "image/png");
+    };
+    img.src = dataUrl;
+  });
+}
+
+/* ---------- recent codes ---------- */
+function pushRecent(code){
+  let r = JSON.parse(localStorage.getItem("garna_share_recent") || "[]");
+  r = [code, ...r.filter(x => x !== code)].slice(0, 5);
+  localStorage.setItem("garna_share_recent", JSON.stringify(r));
+  renderRecent();
+}
+function renderRecent(){
+  const r = JSON.parse(localStorage.getItem("garna_share_recent") || "[]");
+  const box = document.getElementById("recent");
+  box.innerHTML = "";
+  if(!r.length) return;
+  const lbl = document.createElement("span");
+  lbl.className = "meta"; lbl.textContent = "недавние:";
+  box.appendChild(lbl);
+  r.forEach(c => {
+    const b = document.createElement("button");
+    b.className = "chip"; b.textContent = c;
+    b.onclick = () => doLoad(c);
+    box.appendChild(b);
+  });
+}
+
+/* ---------- init ---------- */
+addTextBlock("");
+renderRecent();
+updateMeta();
+const fromUrl = new URLSearchParams(location.search).get("c");
+if(fromUrl){
+  showView("get");
+  codeInput.value = fromUrl.toUpperCase();
+  if(db()) doLoad(fromUrl);
+}else{
+  showView("send");
+}
+</script>
+</body>
+</html>
