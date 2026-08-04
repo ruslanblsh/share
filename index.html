@@ -99,9 +99,11 @@ textarea{min-height:104px}
 }
 .editor:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)}
 .editor:empty:before{content:attr(data-ph);color:var(--muted)}
-.rich p,.rich div{margin:0 0 .55em}
+.rich p,.rich div{margin:0 0 .9em}
 .rich p:last-child,.rich div:last-child{margin-bottom:0}
-.rich ul,.rich ol{margin:.2em 0 .55em;padding-left:22px}
+.rich ul,.rich ol{margin:0 0 .9em;padding-left:22px}
+.rich li{margin:0}
+.rich li p,.rich li div,.rich li ul,.rich li ol{margin:0}
 .rich a{color:var(--accent)}
 .block{position:relative;margin-bottom:10px}
 .block .kill{
@@ -214,6 +216,7 @@ a{color:var(--accent)}
       <h2>Текст</h2>
       <div id="textBlocks"></div>
       <button class="btn ghost" onclick="addTextBlock('')">+ ещё блок текста</button>
+      <div class="meta" style="margin-top:10px">Enter - новый абзац с пустой строкой, Shift+Enter - перенос без отступа. Как выглядит здесь, так и вставится.</div>
     </div>
 
     <div class="card">
@@ -393,7 +396,12 @@ function copyClean(src, dest){
 
     const style = node.getAttribute("style") || "";
     const chain = [];
-    const base = KEEP_TAG[tag];
+    let base = KEEP_TAG[tag];
+    /* Word и Google Docs заворачивают весь фрагмент в <b style="font-weight:normal">
+       ради своих внутренних меток. Если тег говорит «жирный», а стиль says normal -
+       верим стилю, иначе жирным становится весь вставленный кусок. */
+    if(base === "strong" && /font-weight\s*:\s*(normal|400|lighter)/i.test(style)) base = null;
+    if(base === "em" && /font-style\s*:\s*normal/i.test(style)) base = null;
     if(base) chain.push(base);
     if(/font-weight\s*:\s*(bold|[6-9]00)/i.test(style) && !chain.includes("strong")) chain.push("strong");
     if(/font-style\s*:\s*italic/i.test(style) && !chain.includes("em")) chain.push("em");
@@ -443,35 +451,73 @@ function uni(text, bold, ital){
   return out;
 }
 
+/* Раскладка в плоский текст по тому же принципу, что видно в редакторе:
+   абзац (Enter) - пустая строка после, Shift+Enter - просто перенос,
+   пункты списка идут вплотную друг к другу. */
 function flatten(html, styled){
   const root = document.createElement("div");
   root.innerHTML = html;
-  let out = "";
-  const walk = (node, bold, ital) => {
+  const lines = [];
+  let cur = "";
+
+  const flush = gap => {
+    const t = cur.trim();
+    if(t || lines.length) lines.push({ text: t, gap: !!gap });
+    cur = "";
+  };
+
+  const walk = (node, bold, ital, inLi) => {
     for(const n of [...node.childNodes]){
       if(n.nodeType === 3){
         const txt = n.nodeValue.replace(/\u00A0/g, " ");
-        out += styled ? uni(txt, bold, ital) : txt;
+        cur += styled ? uni(txt, bold, ital) : txt;
         continue;
       }
       if(n.nodeType !== 1) continue;
       const t = n.tagName.toUpperCase();
-      if(t === "BR"){ out += "\n"; continue; }
       const b = bold || t === "B" || t === "STRONG";
       const i = ital || t === "I" || t === "EM";
-      if(t === "LI"){
-        const p = n.parentElement;
-        if(p && p.tagName === "OL"){
-          out += ([...p.children].filter(c => c.tagName === "LI").indexOf(n) + 1) + ". ";
-        }else{
-          out += "• ";
-        }
+
+      if(t === "BR"){ flush(false); continue; }
+
+      if(t === "UL" || t === "OL"){
+        if(cur.trim()) flush(false);
+        walk(n, b, i, inLi);
+        if(lines.length) lines[lines.length - 1].gap = true;   // отбить список от следующего абзаца
+        continue;
       }
-      walk(n, b, i);
-      if(t === "P" || t === "DIV" || t === "LI" || t === "TR") out += "\n";
+
+      if(t === "LI"){
+        if(cur.trim()) flush(false);
+        const p = n.parentElement;
+        const prefix = (p && p.tagName === "OL")
+          ? ([...p.children].filter(c => c.tagName === "LI").indexOf(n) + 1) + ". "
+          : "• ";
+        cur += prefix;
+        walk(n, b, i, true);
+        if(cur.trim() === prefix.trim()) cur = "";            // пустой пункт не нужен
+        if(cur.trim()) flush(false);
+        continue;
+      }
+
+      if(t === "P" || t === "DIV" || t === "BLOCKQUOTE"){
+        walk(n, b, i, inLi);
+        flush(!inLi);                                          // внутри пункта списка абзац не отбиваем
+        continue;
+      }
+
+      walk(n, b, i, inLi);
     }
   };
-  walk(root, false, false);
+
+  walk(root, false, false, false);
+  if(cur.trim()) flush(false);
+
+  let out = "";
+  lines.forEach((l, idx) => {
+    out += l.text;
+    if(idx < lines.length - 1) out += l.gap ? "\n\n" : "\n";
+  });
   return out.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
