@@ -267,7 +267,7 @@ a{color:var(--accent)}
    например: https://garna-share-default-rtdb.europe-west1.firebasedatabase.app
    Если оставить пустым, сайт спросит адрес при первом открытии.
 ----------------------------------------------------------------*/
-const DB_URL = "https://garna-share-default-rtdb.europe-west1.firebasedatabase.app/";
+const DB_URL = "https://garna-share-default-rtdb.europe-west1.firebasedatabase.app";
 
 const ALPHABET = "ACEFHJKLMNPRTUVWXY34679";
 const CODE_LEN = 5;
@@ -418,12 +418,61 @@ function copyClean(src, dest){
   }
 }
 
-function htmlToText(html){
-  const d = document.createElement("div");
-  d.innerHTML = html;
-  d.querySelectorAll("br").forEach(b => b.replaceWith("\n"));
-  d.querySelectorAll("p,div,li,tr").forEach(b => b.append("\n"));
-  return d.textContent.replace(/\u00A0/g, " ").replace(/\n{3,}/g, "\n\n").replace(/[ \t]+\n/g, "\n").trim();
+function htmlToText(html){ return flatten(html, false); }
+function htmlToUnicode(html){ return flatten(html, true); }
+
+/* Псевдожирный и псевдокурсив символами Unicode - единственное, что переживает
+   вставку в поля вроде окна поста LinkedIn, где любая разметка вычищается.
+   Работает только для латиницы и цифр: кириллицы в этом блоке Unicode нет. */
+const UNI = {
+  bold:       { up: 0x1D5D4, low: 0x1D5EE, dig: 0x1D7EC },
+  italic:     { up: 0x1D608, low: 0x1D622, dig: null },
+  bolditalic: { up: 0x1D63C, low: 0x1D656, dig: 0x1D7EC }
+};
+function uni(text, bold, ital){
+  const map = bold && ital ? UNI.bolditalic : bold ? UNI.bold : ital ? UNI.italic : null;
+  if(!map) return text;
+  let out = "";
+  for(const ch of text){
+    const c = ch.codePointAt(0);
+    if(c >= 65 && c <= 90) out += String.fromCodePoint(map.up + c - 65);
+    else if(c >= 97 && c <= 122) out += String.fromCodePoint(map.low + c - 97);
+    else if(c >= 48 && c <= 57 && map.dig) out += String.fromCodePoint(map.dig + c - 48);
+    else out += ch;
+  }
+  return out;
+}
+
+function flatten(html, styled){
+  const root = document.createElement("div");
+  root.innerHTML = html;
+  let out = "";
+  const walk = (node, bold, ital) => {
+    for(const n of [...node.childNodes]){
+      if(n.nodeType === 3){
+        const txt = n.nodeValue.replace(/\u00A0/g, " ");
+        out += styled ? uni(txt, bold, ital) : txt;
+        continue;
+      }
+      if(n.nodeType !== 1) continue;
+      const t = n.tagName.toUpperCase();
+      if(t === "BR"){ out += "\n"; continue; }
+      const b = bold || t === "B" || t === "STRONG";
+      const i = ital || t === "I" || t === "EM";
+      if(t === "LI"){
+        const p = n.parentElement;
+        if(p && p.tagName === "OL"){
+          out += ([...p.children].filter(c => c.tagName === "LI").indexOf(n) + 1) + ". ";
+        }else{
+          out += "• ";
+        }
+      }
+      walk(n, b, i);
+      if(t === "P" || t === "DIV" || t === "LI" || t === "TR") out += "\n";
+    }
+  };
+  walk(root, false, false);
+  return out.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 /* ---------- images ---------- */
@@ -637,19 +686,31 @@ function renderItems(items, createdAt){
     card.className = "item";
     if(it.type === "text"){
       const html = sanitizeHTML(it.html || escapeHTML(it.value || "").replace(/\r?\n/g, "<br>"));
-      const plain = it.value || htmlToText(html);
+      const plain = htmlToText(html);
+      const forLinkedIn = htmlToUnicode(html);
       const body = document.createElement("div");
       body.className = "rich";
       body.innerHTML = html;
       const row = document.createElement("div"); row.className = "row";
+      const b0 = document.createElement("button");
+      b0.className = "btn primary"; b0.textContent = "Копировать для LinkedIn";
+      b0.title = "Жирный и курсив станут символами Unicode, они переживут вставку в поле поста";
+      b0.onclick = () => copyText(forLinkedIn, b0, "Скопировано для LinkedIn");
       const b1 = document.createElement("button");
-      b1.className = "btn primary"; b1.textContent = "Копировать с форматированием";
+      b1.className = "btn"; b1.textContent = "С форматированием";
+      b1.title = "HTML - для редакторов, которые понимают разметку";
       b1.onclick = () => copyRich(html, plain, b1);
       const b2 = document.createElement("button");
       b2.className = "btn"; b2.textContent = "Только текст";
       b2.onclick = () => copyText(plain, b2, "Скопировано");
-      row.appendChild(b1); row.appendChild(b2);
+      row.appendChild(b0); row.appendChild(b1); row.appendChild(b2);
       card.appendChild(body); card.appendChild(row);
+      if(/<(strong|b|em|i)[\s>]/i.test(html) && /[а-яё]/i.test(plain)){
+        const hint = document.createElement("div");
+        hint.className = "meta"; hint.style.marginTop = "8px";
+        hint.textContent = "кириллица в Unicode-жирный не превращается, останется обычной";
+        card.appendChild(hint);
+      }
     }else{
       const img = document.createElement("img");
       img.src = it.value; img.alt = it.name || "изображение " + (idx + 1);
