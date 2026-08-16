@@ -2,27 +2,37 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>Garna Share - буфер обмена между машинами</title>
+<title>Share - перенос текста и файлов между устройствами</title>
+<meta name="theme-color" content="#EDF1EE">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Share">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{
-  --paper:#E9EDF2;
+  --paper:#EDF1EE;
   --surface:#FFFFFF;
-  --ink:#0F161C;
-  --muted:#6A7683;
-  --line:#C7D0DA;
-  --line-soft:#DFE5EC;
-  --accent:#1F4BE0;
+  --ink:#101713;
+  --muted:#66736B;
+  --line:#C4CFC8;
+  --line-soft:#DDE4DF;
+  --accent:#0E8A5F;
+  --accent-deep:#0A6B4A;
+  --accent-soft:#E4F2EB;
   --accent-ink:#FFFFFF;
   --ok:#0E7A57;
   --warn:#B4530C;
   --sans:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-  --r:10px;
+  --r:12px;
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
@@ -33,31 +43,42 @@ body{
   font-size:15px;
   line-height:1.5;
   -webkit-font-smoothing:antialiased;
-  padding:24px 16px 64px;
+  padding:max(20px, env(safe-area-inset-top)) 16px calc(56px + env(safe-area-inset-bottom));
 }
 .wrap{max-width:680px;margin:0 auto}
 
-/* header */
-header{display:flex;align-items:center;gap:12px;margin-bottom:6px}
-.mark{width:30px;height:30px;flex:none;border-radius:8px;background:var(--accent);display:grid;place-items:center}
-.mark svg{display:block}
-#logo{height:26px;width:auto;display:block}
-.brand{font-weight:600;letter-spacing:-.01em;font-size:18px}
-.brand span{color:var(--muted);font-weight:400}
+/* ---------- animations ---------- */
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes popIn{from{opacity:0;transform:scale(.86)}to{opacity:1;transform:none}}
+.card,.item{animation:fadeUp .28s ease both}
+.cell{animation:popIn .3s cubic-bezier(.2,.9,.3,1.4) both}
+.cell:nth-child(1){animation-delay:.02s}.cell:nth-child(2){animation-delay:.07s}
+.cell:nth-child(3){animation-delay:.12s}.cell:nth-child(4){animation-delay:.17s}
+.cell:nth-child(5){animation-delay:.22s}
+@media (prefers-reduced-motion: reduce){
+  *,*:before,*:after{animation:none !important;transition:none !important}
+}
+
+/* ---------- header ---------- */
+header{display:flex;align-items:center;gap:11px;margin-bottom:4px}
+.mark{width:34px;height:34px;flex:none}
+.mark svg,#logo{display:block;width:100%;height:100%}
+#logo{width:auto;height:30px}
+.brand{font-weight:600;letter-spacing:-.01em;font-size:19px;line-height:1.1}
+.brand span{color:var(--accent);font-weight:600}
 .tagline{
   font-family:var(--mono);font-size:12px;color:var(--muted);
-  letter-spacing:.02em;margin:0 0 22px 42px;
+  letter-spacing:.02em;margin:0 0 20px 45px;
 }
-.tagline b{color:var(--ink);font-weight:500}
 
-/* tabs */
-.tabs{display:flex;gap:2px;background:var(--line-soft);padding:3px;border-radius:var(--r);margin-bottom:18px}
+/* ---------- tabs ---------- */
+.tabs{display:flex;gap:2px;background:var(--line-soft);padding:3px;border-radius:var(--r);margin-bottom:16px}
 .tabs button{
   flex:1;appearance:none;border:0;background:transparent;cursor:pointer;
-  font-family:var(--sans);font-size:14px;font-weight:500;color:var(--muted);
-  padding:9px 8px;border-radius:8px;transition:background .12s,color .12s;
+  font-family:var(--sans);font-size:14.5px;font-weight:500;color:var(--muted);
+  padding:10px 8px;border-radius:9px;transition:background .16s,color .16s,box-shadow .16s;
 }
-.tabs button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(15,22,28,.08)}
+.tabs button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(16,23,19,.1)}
 .tabs button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 
 .card{
@@ -70,20 +91,22 @@ header{display:flex;align-items:center;gap:12px;margin-bottom:6px}
 }
 .hidden{display:none !important}
 
-textarea,input[type=text]{
+input[type=text]{
   width:100%;font-family:var(--sans);font-size:15px;color:var(--ink);
-  background:var(--surface);border:1px solid var(--line);border-radius:8px;
-  padding:11px 12px;resize:vertical;
+  background:var(--surface);border:1px solid var(--line);border-radius:9px;
+  padding:11px 12px;
 }
-textarea:focus,input:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)}
-textarea{min-height:104px}
+input:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)}
+
+/* ---------- editor ---------- */
 .toolbar{
   display:flex;gap:2px;align-items:center;padding:4px;background:var(--paper);
-  border:1px solid var(--line);border-bottom:0;border-radius:8px 8px 0 0;
+  border:1px solid var(--line);border-bottom:0;border-radius:9px 9px 0 0;
 }
 .toolbar button{
-  min-width:28px;height:26px;border:0;background:transparent;border-radius:5px;cursor:pointer;
-  font-family:var(--sans);font-size:14px;color:var(--muted);padding:0 6px;
+  min-width:28px;height:26px;border:0;background:transparent;border-radius:6px;cursor:pointer;
+  font-family:var(--sans);font-size:14px;color:var(--muted);padding:0 7px;
+  transition:background .14s,color .14s;
 }
 .toolbar button:hover{background:var(--surface);color:var(--ink)}
 .toolbar button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
@@ -94,8 +117,8 @@ textarea{min-height:104px}
 .toolbar .plain{font-size:12px}
 .editor{
   width:100%;min-height:104px;font-family:var(--sans);font-size:15px;color:var(--ink);
-  background:var(--surface);border:1px solid var(--line);border-radius:0 0 8px 8px;
-  padding:11px 12px;overflow-wrap:anywhere;
+  background:var(--surface);border:1px solid var(--line);border-radius:0 0 9px 9px;
+  padding:11px 12px;overflow-wrap:anywhere;transition:border-color .14s;
 }
 .editor:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)}
 .editor:empty:before{content:attr(data-ph);color:var(--muted)}
@@ -107,107 +130,132 @@ textarea{min-height:104px}
 .rich a{color:var(--accent)}
 .block{position:relative;margin-bottom:10px}
 .block .kill{
-  width:26px;height:26px;border-radius:5px;border:0;background:transparent;color:var(--muted);
+  width:26px;height:26px;border-radius:6px;border:0;background:transparent;color:var(--muted);
   cursor:pointer;font-size:16px;line-height:1;display:grid;place-items:center;
 }
 .block .kill:hover{color:var(--warn);background:var(--surface)}
 
-/* buttons */
+/* ---------- buttons ---------- */
 .btn{
   appearance:none;font-family:var(--sans);font-size:14px;font-weight:500;
-  border-radius:8px;padding:9px 14px;cursor:pointer;
+  border-radius:9px;padding:9px 14px;cursor:pointer;
   display:inline-block;text-decoration:none;line-height:1.4;
   border:1px solid var(--line);background:var(--surface);color:var(--ink);
-  transition:background .12s,border-color .12s,color .12s;
+  transition:background .16s,border-color .16s,color .16s,transform .12s,box-shadow .16s;
 }
-.btn:hover{border-color:var(--ink)}
+.btn:hover{border-color:var(--accent);color:var(--accent-deep)}
+.btn:active{transform:translateY(1px)}
 .btn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
-.btn.primary:hover{background:#173CB8;border-color:#173CB8}
+.btn.primary:hover{background:var(--accent-deep);border-color:var(--accent-deep);color:var(--accent-ink);box-shadow:0 2px 8px rgba(14,138,95,.28)}
 .btn.big{width:100%;padding:14px;font-size:16px}
 .btn.ghost{background:transparent}
-.btn:disabled{opacity:.45;cursor:default}
-.btn.done{color:var(--ok);border-color:var(--ok)}
+.btn:disabled{opacity:.45;cursor:default;transform:none;box-shadow:none}
+.btn.done{color:var(--ok);border-color:var(--ok);background:var(--accent-soft)}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 
-/* dropzone */
+/* ---------- dropzone / files ---------- */
 .drop{
-  border:1px dashed var(--line);border-radius:8px;padding:22px 12px;text-align:center;
-  color:var(--muted);font-size:14px;cursor:pointer;transition:border-color .12s,background .12s;
+  border:1.5px dashed var(--line);border-radius:9px;padding:22px 12px;text-align:center;
+  color:var(--muted);font-size:14px;cursor:pointer;transition:border-color .16s,background .16s,color .16s;
 }
-.drop:hover,.drop.over{border-color:var(--accent);background:#F4F7FF;color:var(--ink)}
+.drop:hover,.drop.over{border-color:var(--accent);background:var(--accent-soft);color:var(--ink)}
 .thumbs{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
-.thumb{position:relative;width:92px;height:92px;border-radius:8px;overflow:hidden;border:1px solid var(--line-soft);background:var(--paper)}
+.thumb{position:relative;width:92px;height:92px;border-radius:9px;overflow:hidden;border:1px solid var(--line-soft);background:var(--paper);animation:popIn .22s ease both}
 .thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb.filecard{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:6px;width:auto;min-width:92px;max-width:150px;height:92px}
+.thumb.filecard .fname{font-size:11px;color:var(--ink);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.thumb.filecard .fsize{font-family:var(--mono);font-size:10px;color:var(--muted)}
 .thumb .kill{
-  position:absolute;top:4px;right:4px;width:20px;height:20px;border-radius:5px;border:0;
-  background:rgba(15,22,28,.72);color:#fff;cursor:pointer;font-size:13px;line-height:1;display:grid;place-items:center;
+  position:absolute;top:4px;right:4px;width:20px;height:20px;border-radius:6px;border:0;
+  background:rgba(16,23,19,.72);color:#fff;cursor:pointer;font-size:13px;line-height:1;display:grid;place-items:center;
 }
+.ficon{width:26px;height:26px;color:var(--accent)}
 
 .meta{font-family:var(--mono);font-size:11.5px;color:var(--muted);letter-spacing:.02em}
 .meta.warn{color:var(--warn)}
 
-/* code display - signature element */
+/* ---------- code screen ---------- */
 .codebox{text-align:center;padding:26px 18px}
 .codebox .lbl{font-family:var(--mono);font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
 .cells{display:flex;justify-content:center;gap:8px;margin:14px 0 4px}
 .cell{
   width:52px;height:66px;display:grid;place-items:center;
   font-family:var(--mono);font-size:32px;font-weight:600;
-  border:1px solid var(--line);border-bottom:3px solid var(--accent);border-radius:8px;
+  border:1px solid var(--line);border-bottom:3px solid var(--accent);border-radius:9px;
   background:var(--paper);
 }
 @media (max-width:420px){.cell{width:42px;height:56px;font-size:26px}}
+.qrbox{display:flex;justify-content:center;margin:18px 0 12px}
+.qrbox svg{
+  width:190px;height:190px;display:block;border-radius:10px;
+  background:#fff;padding:9px;border:1px solid var(--line-soft);
+  animation:popIn .34s cubic-bezier(.2,.9,.3,1.3) both;animation-delay:.24s;
+}
+@media (max-width:420px){.qrbox svg{width:172px;height:172px}}
 
-/* receive */
+/* ---------- receive ---------- */
 .codeinput{
   width:100%;font-family:var(--mono);font-size:30px;font-weight:600;text-align:center;
   letter-spacing:.22em;text-transform:uppercase;padding:14px 12px;
-  border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);
+  border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--ink);
 }
-.item{border:1px solid var(--line-soft);border-radius:8px;padding:14px;margin-bottom:10px;background:var(--surface)}
-.item .rich{
-  margin:0 0 12px;font-size:15px;word-wrap:break-word;
-  max-height:320px;overflow:auto;
-}
-.item img{max-width:100%;border-radius:6px;display:block;margin-bottom:12px;border:1px solid var(--line-soft)}
+.item{border:1px solid var(--line-soft);border-radius:9px;padding:14px;margin-bottom:10px;background:var(--surface)}
+.item .rich{margin:0 0 12px;font-size:15px;word-wrap:break-word;max-height:320px;overflow:auto}
+.item img{max-width:100%;border-radius:7px;display:block;margin-bottom:12px;border:1px solid var(--line-soft)}
+.filerow{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.filerow .fname{font-weight:500;overflow-wrap:anywhere}
 .status{font-size:14px;color:var(--muted);padding:6px 0}
 .status.err{color:var(--warn)}
 .recent{margin-top:12px}
 .chip{
-  font-family:var(--mono);font-size:13px;padding:5px 10px;border-radius:6px;
+  font-family:var(--mono);font-size:13px;padding:5px 10px;border-radius:7px;
   border:1px solid var(--line-soft);background:var(--surface);cursor:pointer;color:var(--ink);
+  transition:border-color .14s,color .14s;
 }
-.chip:hover{border-color:var(--accent);color:var(--accent)}
+.chip:hover{border-color:var(--accent);color:var(--accent-deep)}
+
+/* ---------- storage ---------- */
+table.store{width:100%;border-collapse:collapse;font-size:14px}
+table.store th{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--muted);text-align:left;font-weight:500;padding:6px 8px;border-bottom:1px solid var(--line-soft);
+}
+table.store td{padding:8px;border-bottom:1px solid var(--line-soft);vertical-align:middle}
+table.store tr:last-child td{border-bottom:0}
+table.store .code{font-family:var(--mono);font-weight:600;cursor:pointer;color:var(--accent-deep)}
+table.store .code:hover{text-decoration:underline}
+table.store .num{font-family:var(--mono);font-size:12.5px;color:var(--muted);white-space:nowrap}
+.minidel{
+  width:26px;height:26px;border-radius:6px;border:1px solid var(--line-soft);background:var(--surface);
+  color:var(--muted);cursor:pointer;font-size:14px;line-height:1;
+}
+.minidel:hover{color:var(--warn);border-color:var(--warn)}
+
 footer{margin-top:26px;font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center}
-a{color:var(--accent)}
+footer a{color:var(--muted);text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+footer a:hover{color:var(--accent-deep)}
 </style>
 </head>
 <body>
 <div class="wrap">
 
   <header>
-    <img id="logo" src="logo.svg" alt="Garna" onerror="this.remove();document.getElementById('fallbackMark').hidden=false;document.getElementById('fallbackName').hidden=false">
+    <img id="logo" src="logo.svg" alt="" onerror="this.remove();document.getElementById('fallbackMark').hidden=false">
     <div class="mark" id="fallbackMark" hidden>
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8h9M8 4.5 11.5 8 8 11.5" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M13.5 3v10" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>
+      <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect width="64" height="64" rx="15" fill="#0E8A5F"/>
+        <path d="M14 32h24M30 22l10 10-10 10" stroke="#fff" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M46 18v28" stroke="#fff" stroke-width="4.6" stroke-linecap="round" opacity=".55"/>
+      </svg>
     </div>
-    <div class="brand" id="fallbackName" hidden>garna <span>share</span></div>
+    <div class="brand">share <span>·</span> garna</div>
   </header>
-  <p class="tagline">твой компьютер <b>→</b> cloud browser в getsales</p>
+  <p class="tagline">текст, картинки и файлы - кодом на любое устройство</p>
 
   <div class="tabs" role="tablist">
     <button role="tab" id="tabSend" aria-selected="true" onclick="showView('send')">Отправить</button>
     <button role="tab" id="tabGet" aria-selected="false" onclick="showView('get')">Получить</button>
-  </div>
-
-  <!-- ================= SETUP ================= -->
-  <div id="setupView" class="card hidden">
-    <h2>Первый запуск</h2>
-    <p style="margin-top:0">Вставь адрес Realtime Database из Firebase. Сохранится в этом браузере, спрашивать больше не будет.</p>
-    <input type="text" id="dbInput" placeholder="https://имя-проекта-default-rtdb.europe-west1.firebasedatabase.app">
-    <div class="row" style="margin-top:10px">
-      <button class="btn primary" onclick="saveDb()">Сохранить адрес</button>
-    </div>
   </div>
 
   <!-- ================= SEND ================= -->
@@ -220,15 +268,15 @@ a{color:var(--accent)}
     </div>
 
     <div class="card">
-      <h2>Изображения</h2>
+      <h2>Картинки и файлы</h2>
       <div class="drop" id="drop" tabindex="0" role="button">
-        перетащи файлы, нажми для выбора или просто вставь из буфера (Ctrl+V)
+        перетащи сюда, нажми для выбора или вставь из буфера (Ctrl+V)
       </div>
-      <input type="file" id="picker" accept="image/*" multiple class="hidden">
+      <input type="file" id="picker" multiple class="hidden">
       <div class="thumbs" id="thumbs"></div>
     </div>
 
-    <button class="btn primary big" id="saveBtn" onclick="doSave()">Сохранить в облако</button>
+    <button class="btn primary big" id="saveBtn" onclick="doSave()">Сохранить и получить код</button>
     <div class="row" style="justify-content:space-between;margin-top:8px">
       <span class="meta" id="sizeMeta">пусто</span>
       <button class="btn ghost" style="border:0;padding:4px 0" onclick="resetSend()">очистить всё</button>
@@ -241,9 +289,11 @@ a{color:var(--accent)}
     <div class="card codebox">
       <div class="lbl">Код пакета</div>
       <div class="cells" id="codeCells"></div>
-      <div class="meta">введи его во вкладке «Получить» внутри cloud browser</div>
+      <div class="qrbox" id="qrBox"></div>
+      <div class="meta">наведи камеру телефона на код или введи 5 символов во вкладке «Получить»</div>
       <div class="row" style="justify-content:center;margin-top:16px">
-        <button class="btn" id="copyLinkBtn" onclick="copyLink()">Копировать ссылку</button>
+        <button class="btn" id="copyCodeBtn" onclick="copyCode()">Копировать код</button>
+        <button class="btn" id="copyLinkBtn" onclick="copyLink()">Ссылка</button>
         <button class="btn" onclick="resetSend();showView('send')">Новый пакет</button>
       </div>
     </div>
@@ -261,49 +311,44 @@ a{color:var(--accent)}
     <div id="items"></div>
   </div>
 
-  <footer>внутренний инструмент garna · пакеты лежат в облаке, пока их не удалить</footer>
+  <!-- ================= STORAGE ================= -->
+  <div id="storeView" class="hidden">
+    <div class="card">
+      <h2>Хранилище</h2>
+      <div class="status" id="storeStatus">Загружаю…</div>
+      <div id="storeBody"></div>
+    </div>
+  </div>
+
+  <footer>сделано в garna · пакеты удаляются сами через 30 дней · <a onclick="showView('store')">хранилище</a></footer>
 </div>
 
 <script>
-/* ---------------------------------------------------------------
-   КОНФИГ. Вставь сюда адрес своей Realtime Database из Firebase,
-   например: https://garna-share-default-rtdb.europe-west1.firebasedatabase.app
-   Если оставить пустым, сайт спросит адрес при первом открытии.
-----------------------------------------------------------------*/
 const DB_URL = "https://garna-share-default-rtdb.europe-west1.firebasedatabase.app";
 
 const ALPHABET = "ACEFHJKLMNPRTUVWXY34679";
 const CODE_LEN = 5;
 const MAX_EDGE = 1920;
 const SOFT_LIMIT = 9 * 1024 * 1024;
+const TTL_DAYS = 30;
 
-let images = [];      // {id, dataUrl, name}
+let attachments = [];   // {id, kind:'image'|'file', dataUrl, name, mime, bytes}
 let currentCode = "";
 
-/* ---------- storage config ---------- */
-function db(){
-  return (DB_URL || localStorage.getItem("garna_share_db") || "").replace(/\/+$/,"");
-}
-function saveDb(){
-  const v = document.getElementById("dbInput").value.trim().replace(/\/+$/,"");
-  if(!/^https:\/\/.+/.test(v)){ alert("Адрес должен начинаться с https://"); return; }
-  localStorage.setItem("garna_share_db", v);
-  document.getElementById("setupView").classList.add("hidden");
-  showView(currentView);
-}
+function db(){ return DB_URL.replace(/\/+$/,""); }
 
 /* ---------- views ---------- */
 let currentView = "send";
 function showView(v){
   currentView = v;
-  const needSetup = !db();
-  document.getElementById("setupView").classList.toggle("hidden", !needSetup);
-  document.getElementById("sendView").classList.toggle("hidden", needSetup || v !== "send" || !!currentCode);
-  document.getElementById("codeView").classList.toggle("hidden", needSetup || v !== "send" || !currentCode);
-  document.getElementById("getView").classList.toggle("hidden", needSetup || v !== "get");
+  document.getElementById("sendView").classList.toggle("hidden", v !== "send" || !!currentCode);
+  document.getElementById("codeView").classList.toggle("hidden", v !== "send" || !currentCode);
+  document.getElementById("getView").classList.toggle("hidden", v !== "get");
+  document.getElementById("storeView").classList.toggle("hidden", v !== "store");
   document.getElementById("tabSend").setAttribute("aria-selected", v === "send");
   document.getElementById("tabGet").setAttribute("aria-selected", v === "get");
   if(v === "get") setTimeout(()=>document.getElementById("codeInput").focus(), 30);
+  if(v === "store") loadStore();
 }
 
 /* ---------- text blocks ---------- */
@@ -316,7 +361,7 @@ function addTextBlock(html){
   const mk = (cls, label, title, cmd) => {
     const b = document.createElement("button");
     b.type = "button"; b.className = cls; b.textContent = label; b.title = title;
-    b.onmousedown = e => e.preventDefault();          // не терять выделение
+    b.onmousedown = e => e.preventDefault();
     b.onclick = () => { ed.focus(); document.execCommand(cmd, false, null); updateMeta(); };
     return b;
   };
@@ -345,7 +390,7 @@ function addTextBlock(html){
   ed.addEventListener("paste", e => {
     const cd = e.clipboardData;
     if(!cd) return;
-    if([...(cd.files || [])].some(f => f.type.startsWith("image/"))) return;  // картинки ловит общий обработчик
+    if([...(cd.files || [])].length) return;      // файлы ловит общий обработчик
     e.preventDefault();
     const raw = cd.getData("text/html");
     const clean = raw ? sanitizeHTML(raw) : escapeHTML(cd.getData("text/plain")).replace(/\r?\n/g, "<br>");
@@ -364,7 +409,7 @@ function getTexts(){
     .filter(t => t.text.trim().length);
 }
 
-/* ---------- html: чистка и конвертация ---------- */
+/* ---------- html: чистка ---------- */
 const KEEP_TAG = {
   B:"strong", STRONG:"strong", I:"em", EM:"em", U:"u", S:"s", STRIKE:"s", DEL:"s",
   P:"p", DIV:"div", BR:"br", UL:"ul", OL:"ol", LI:"li", A:"a",
@@ -392,13 +437,13 @@ function copyClean(src, dest){
     if(node.nodeType === 3){ dest.appendChild(document.createTextNode(node.nodeValue)); continue; }
     if(node.nodeType !== 1) continue;
     const tag = node.tagName.toUpperCase();
-    if(DROP_TAG.has(tag) || tag.includes(":")) continue;   // <o:p>, <v:shape> и прочий мусор Word
+    if(DROP_TAG.has(tag) || tag.includes(":")) continue;
 
     const style = node.getAttribute("style") || "";
     const chain = [];
     let base = KEEP_TAG[tag];
     /* Word и Google Docs заворачивают весь фрагмент в <b style="font-weight:normal">
-       ради своих внутренних меток. Если тег говорит «жирный», а стиль says normal -
+       ради своих внутренних меток. Если тег говорит «жирный», а стиль - normal,
        верим стилю, иначе жирным становится весь вставленный кусок. */
     if(base === "strong" && /font-weight\s*:\s*(normal|400|lighter)/i.test(style)) base = null;
     if(base === "em" && /font-style\s*:\s*normal/i.test(style)) base = null;
@@ -426,12 +471,10 @@ function copyClean(src, dest){
   }
 }
 
+/* ---------- html -> плоский текст / Unicode ---------- */
 function htmlToText(html){ return flatten(html, false); }
 function htmlToUnicode(html){ return flatten(html, true); }
 
-/* Псевдожирный и псевдокурсив символами Unicode - единственное, что переживает
-   вставку в поля вроде окна поста LinkedIn, где любая разметка вычищается.
-   Работает только для латиницы и цифр: кириллицы в этом блоке Unicode нет. */
 const UNI = {
   bold:       { up: 0x1D5D4, low: 0x1D5EE, dig: 0x1D7EC },
   italic:     { up: 0x1D608, low: 0x1D622, dig: null },
@@ -451,9 +494,8 @@ function uni(text, bold, ital){
   return out;
 }
 
-/* Раскладка в плоский текст по тому же принципу, что видно в редакторе:
-   абзац (Enter) - пустая строка после, Shift+Enter - просто перенос,
-   пункты списка идут вплотную друг к другу. */
+/* Раскладка как в редакторе: абзац - пустая строка, Shift+Enter - перенос,
+   пункты списка вплотную, отступ только вокруг списка. */
 function flatten(html, styled){
   const root = document.createElement("div");
   root.innerHTML = html;
@@ -483,7 +525,7 @@ function flatten(html, styled){
       if(t === "UL" || t === "OL"){
         if(cur.trim()) flush(false);
         walk(n, b, i, inLi);
-        if(lines.length) lines[lines.length - 1].gap = true;   // отбить список от следующего абзаца
+        if(lines.length) lines[lines.length - 1].gap = true;
         continue;
       }
 
@@ -495,14 +537,14 @@ function flatten(html, styled){
           : "• ";
         cur += prefix;
         walk(n, b, i, true);
-        if(cur.trim() === prefix.trim()) cur = "";            // пустой пункт не нужен
+        if(cur.trim() === prefix.trim()) cur = "";
         if(cur.trim()) flush(false);
         continue;
       }
 
       if(t === "P" || t === "DIV" || t === "BLOCKQUOTE"){
         walk(n, b, i, inLi);
-        flush(!inLi);                                          // внутри пункта списка абзац не отбиваем
+        flush(!inLi);
         continue;
       }
 
@@ -521,7 +563,7 @@ function flatten(html, styled){
   return out.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
-/* ---------- images ---------- */
+/* ---------- attachments ---------- */
 const drop = document.getElementById("drop");
 const picker = document.getElementById("picker");
 drop.onclick = () => picker.click();
@@ -533,19 +575,38 @@ drop.addEventListener("drop", e => addFiles([...e.dataTransfer.files]));
 
 document.addEventListener("paste", e => {
   if(currentView !== "send" || currentCode) return;
-  const files = [...(e.clipboardData?.files || [])].filter(f => f.type.startsWith("image/"));
+  const files = [...(e.clipboardData?.files || [])];
   if(files.length){ e.preventDefault(); addFiles(files); }
 });
 
 async function addFiles(files){
   for(const f of files){
-    if(!f.type.startsWith("image/")) continue;
     try{
-      const dataUrl = await prepareImage(f);
-      images.push({ id: Math.random().toString(36).slice(2), dataUrl, name: f.name || "image" });
-    }catch(err){ console.error(err); }
+      if(f.type.startsWith("image/")){
+        const dataUrl = await prepareImage(f);
+        attachments.push({ id: rid(), kind: "image", dataUrl, name: f.name || "image", mime: f.type, bytes: dataUrl.length });
+      }else{
+        if(f.size > SOFT_LIMIT){ note(`«${f.name}» больше 9 МБ, пропускаю`); continue; }
+        const dataUrl = await readAsDataUrl(f);
+        attachments.push({ id: rid(), kind: "file", dataUrl, name: f.name || "file", mime: f.type || "application/octet-stream", bytes: dataUrl.length });
+      }
+    }catch(err){ console.error(err); note(`«${f.name}» не прочитался`); }
   }
   renderThumbs(); updateMeta();
+}
+function rid(){ return Math.random().toString(36).slice(2); }
+function note(msg){
+  const st = document.getElementById("sendStatus");
+  st.className = "status err"; st.textContent = msg;
+  setTimeout(() => { if(st.textContent === msg) st.textContent = ""; }, 4000);
+}
+function readAsDataUrl(file){
+  return new Promise((res, rej) => {
+    const fr = new FileReader();
+    fr.onerror = () => rej(new Error("read fail"));
+    fr.onload = () => res(fr.result);
+    fr.readAsDataURL(file);
+  });
 }
 
 function prepareImage(file){
@@ -584,33 +645,50 @@ function prepareImage(file){
   });
 }
 
+const FILE_ICON = '<svg class="ficon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 2.8h7.2L19 8.6V21a1.2 1.2 0 0 1-1.2 1.2H6A1.2 1.2 0 0 1 4.8 21V4A1.2 1.2 0 0 1 6 2.8Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M13 3v6h6" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>';
+
 function renderThumbs(){
   const box = document.getElementById("thumbs");
   box.innerHTML = "";
-  images.forEach(im => {
+  attachments.forEach(at => {
     const d = document.createElement("div");
-    d.className = "thumb";
-    const i = document.createElement("img"); i.src = im.dataUrl; i.alt = im.name;
+    if(at.kind === "image"){
+      d.className = "thumb";
+      const i = document.createElement("img"); i.src = at.dataUrl; i.alt = at.name;
+      d.appendChild(i);
+    }else{
+      d.className = "thumb filecard";
+      d.innerHTML = FILE_ICON + `<div class="fname">${escapeHTML(at.name)}</div><div class="fsize">${human(at.bytes * 0.75)}</div>`;
+    }
     const k = document.createElement("button");
     k.className = "kill"; k.textContent = "×"; k.title = "убрать";
-    k.onclick = () => { images = images.filter(z => z.id !== im.id); renderThumbs(); updateMeta(); };
-    d.appendChild(i); d.appendChild(k); box.appendChild(d);
+    k.onclick = () => { attachments = attachments.filter(z => z.id !== at.id); renderThumbs(); updateMeta(); };
+    d.appendChild(k);
+    box.appendChild(d);
   });
+}
+
+function human(b){
+  if(b < 1024) return Math.round(b) + " Б";
+  if(b < 1024 * 1024) return (b / 1024).toFixed(0) + " КБ";
+  return (b / 1024 / 1024).toFixed(1).replace(".", ",") + " МБ";
 }
 
 /* ---------- size meter ---------- */
 function payloadSize(){
   const t = getTexts().reduce((s, x) => s + x.html.length, 0);
-  const i = images.reduce((s, im) => s + im.dataUrl.length, 0);
+  const i = attachments.reduce((s, a) => s + a.dataUrl.length, 0);
   return t + i;
 }
 function updateMeta(){
   const bytes = payloadSize();
   const el = document.getElementById("sizeMeta");
-  const t = getTexts().length, i = images.length;
-  if(!t && !i){ el.textContent = "пусто"; el.className = "meta"; return; }
-  const mb = (bytes / 1024 / 1024);
-  el.textContent = `${t} текст. блок(ов) · ${i} изобр. · ${mb < 0.1 ? "<0,1" : mb.toFixed(1).replace(".", ",")} МБ`;
+  const t = getTexts().length, n = attachments.length;
+  if(!t && !n){ el.textContent = "пусто"; el.className = "meta"; return; }
+  const parts = [];
+  if(t) parts.push(t + " текст.");
+  if(n) parts.push(n + " файл.");
+  el.textContent = parts.join(" · ") + " · " + human(bytes);
   el.className = bytes > SOFT_LIMIT ? "meta warn" : "meta";
 }
 
@@ -626,12 +704,12 @@ function makeCode(){
 async function doSave(){
   const texts = getTexts();
   const st = document.getElementById("sendStatus");
-  if(!texts.length && !images.length){
-    st.className = "status err"; st.textContent = "Добавь текст или картинку - пока переносить нечего.";
+  if(!texts.length && !attachments.length){
+    st.className = "status err"; st.textContent = "Добавь текст или файл - пока переносить нечего.";
     return;
   }
   if(payloadSize() > SOFT_LIMIT){
-    st.className = "status err"; st.textContent = "Пакет больше 9 МБ. Убери часть картинок.";
+    st.className = "status err"; st.textContent = "Пакет больше 9 МБ. Убери часть файлов.";
     return;
   }
   const btn = document.getElementById("saveBtn");
@@ -640,25 +718,30 @@ async function doSave(){
 
   const items = [
     ...texts.map(t => ({ type: "text", html: t.html, value: t.text })),
-    ...images.map(im => ({ type: "image", name: im.name, value: im.dataUrl }))
+    ...attachments.map(a => a.kind === "image"
+      ? { type: "image", name: a.name, value: a.dataUrl }
+      : { type: "file", name: a.name, mime: a.mime, value: a.dataUrl })
   ];
   const code = makeCode();
+  const body = JSON.stringify({ createdAt: Date.now(), items });
   try{
     const res = await fetch(`${db()}/clips/${code}.json`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ createdAt: Date.now(), items })
+      method: "PUT", headers: { "Content-Type": "application/json" }, body
     });
     if(!res.ok) throw new Error("HTTP " + res.status);
+    fetch(`${db()}/meta/${code}.json`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ t: Date.now(), s: body.length, n: items.length })
+    }).catch(()=>{});
     currentCode = code;
     pushRecent(code);
     renderCode(code);
     showView("send");
   }catch(err){
     st.className = "status err";
-    st.textContent = "Не загрузилось: " + err.message + ". Проверь адрес базы и правила доступа.";
+    st.textContent = "Не загрузилось: " + err.message + ". Проверь интернет и попробуй ещё раз.";
   }finally{
-    btn.disabled = false; btn.textContent = "Сохранить в облако";
+    btn.disabled = false; btn.textContent = "Сохранить и получить код";
   }
 }
 
@@ -670,16 +753,19 @@ function renderCode(code){
     c.className = "cell"; c.textContent = ch;
     cells.appendChild(c);
   });
+  document.getElementById("qrBox").innerHTML = qrSVG(shareUrl(code));
 }
 
+function shareUrl(code){ return location.origin + location.pathname + "?c=" + code; }
+
+function copyCode(){ copyText(currentCode, document.getElementById("copyCodeBtn"), "Код скопирован"); }
 function copyLink(){
-  const url = location.origin + location.pathname + "?c=" + currentCode;
-  copyText(url, document.getElementById("copyLinkBtn"), "Ссылка скопирована");
+  copyText(shareUrl(currentCode), document.getElementById("copyLinkBtn"), "Ссылка скопирована");
 }
 
 function resetSend(){
   currentCode = "";
-  images = [];
+  attachments = [];
   document.getElementById("textBlocks").innerHTML = "";
   addTextBlock("");
   renderThumbs(); updateMeta();
@@ -730,34 +816,35 @@ function renderItems(items, createdAt){
   items.forEach((it, idx) => {
     const card = document.createElement("div");
     card.className = "item";
+    card.style.animationDelay = Math.min(idx * 0.06, 0.3) + "s";
     if(it.type === "text"){
       const html = sanitizeHTML(it.html || escapeHTML(it.value || "").replace(/\r?\n/g, "<br>"));
       const plain = htmlToText(html);
-      const forLinkedIn = htmlToUnicode(html);
+      const hasFormat = /<(strong|em|u|s|ul|ol)[\s>]/i.test(html);
       const body = document.createElement("div");
       body.className = "rich";
       body.innerHTML = html;
       const row = document.createElement("div"); row.className = "row";
-      const b0 = document.createElement("button");
-      b0.className = "btn primary"; b0.textContent = "Копировать для LinkedIn";
-      b0.title = "Жирный и курсив станут символами Unicode, они переживут вставку в поле поста";
-      b0.onclick = () => copyText(forLinkedIn, b0, "Скопировано для LinkedIn");
-      const b1 = document.createElement("button");
-      b1.className = "btn"; b1.textContent = "С форматированием";
-      b1.title = "HTML - для редакторов, которые понимают разметку";
-      b1.onclick = () => copyRich(html, plain, b1);
+      if(hasFormat){
+        const b0 = document.createElement("button");
+        b0.className = "btn primary"; b0.textContent = "Копировать для LinkedIn";
+        b0.title = "Жирный и курсив станут символами Unicode - они переживают вставку в окно поста";
+        b0.onclick = () => copyText(htmlToUnicode(html), b0, "Скопировано");
+        row.appendChild(b0);
+      }
       const b2 = document.createElement("button");
-      b2.className = "btn"; b2.textContent = "Только текст";
+      b2.className = hasFormat ? "btn" : "btn primary";
+      b2.textContent = hasFormat ? "Обычный текст" : "Копировать";
       b2.onclick = () => copyText(plain, b2, "Скопировано");
-      row.appendChild(b0); row.appendChild(b1); row.appendChild(b2);
+      row.appendChild(b2);
       card.appendChild(body); card.appendChild(row);
-      if(/<(strong|b|em|i)[\s>]/i.test(html) && /[а-яё]/i.test(plain)){
+      if(hasFormat && /[а-яё]/i.test(plain)){
         const hint = document.createElement("div");
         hint.className = "meta"; hint.style.marginTop = "8px";
         hint.textContent = "кириллица в Unicode-жирный не превращается, останется обычной";
         card.appendChild(hint);
       }
-    }else{
+    }else if(it.type === "image"){
       const img = document.createElement("img");
       img.src = it.value; img.alt = it.name || "изображение " + (idx + 1);
       const row = document.createElement("div"); row.className = "row";
@@ -769,6 +856,16 @@ function renderItems(items, createdAt){
       b2.href = it.value; b2.download = it.name || `image-${idx + 1}.png`;
       row.appendChild(b1); row.appendChild(b2);
       card.appendChild(img); card.appendChild(row);
+    }else{
+      const fr = document.createElement("div");
+      fr.className = "filerow";
+      fr.innerHTML = FILE_ICON + `<div><div class="fname">${escapeHTML(it.name || "файл")}</div><div class="meta">${human(it.value.length * 0.75)}</div></div>`;
+      const row = document.createElement("div"); row.className = "row";
+      const a = document.createElement("a");
+      a.className = "btn primary"; a.textContent = "Скачать файл";
+      a.href = it.value; a.download = it.name || `file-${idx + 1}`;
+      row.appendChild(a);
+      card.appendChild(fr); card.appendChild(row);
     }
     box.appendChild(card);
   });
@@ -783,8 +880,7 @@ function renderItems(items, createdAt){
 async function dropClip(code, btn){
   btn.disabled = true;
   try{
-    const res = await fetch(`${db()}/clips/${code}.json`, { method: "DELETE" });
-    if(!res.ok) throw new Error("HTTP " + res.status);
+    await deletePkg(code);
     document.getElementById("items").innerHTML = "";
     const st = document.getElementById("getStatus");
     st.className = "status"; st.textContent = "Пакет удалён.";
@@ -792,6 +888,12 @@ async function dropClip(code, btn){
   }catch(e){
     btn.disabled = false; btn.textContent = "Не удалилось: " + e.message;
   }
+}
+
+async function deletePkg(code){
+  const res = await fetch(`${db()}/clips/${code}.json`, { method: "DELETE" });
+  if(!res.ok) throw new Error("HTTP " + res.status);
+  await fetch(`${db()}/meta/${code}.json`, { method: "DELETE" }).catch(()=>{});
 }
 
 /* ---------- clipboard ---------- */
@@ -815,18 +917,6 @@ async function copyText(text, btn, label){
     if(!ok){ btn.textContent = "Не вышло - выдели вручную"; return; }
   }
   flash(btn, label);
-}
-async function copyRich(html, text, btn){
-  try{
-    await navigator.clipboard.write([new ClipboardItem({
-      "text/html": new Blob([html], { type: "text/html" }),
-      "text/plain": new Blob([text], { type: "text/plain" })
-    })]);
-    flash(btn, "Скопировано с форматированием");
-  }catch(e){
-    console.error(e);
-    await copyText(text, btn, "Скопировано без форматирования");
-  }
 }
 async function copyImage(dataUrl, btn){
   try{
@@ -876,16 +966,364 @@ function renderRecent(){
   });
 }
 
+/* ---------- storage panel ---------- */
+async function loadStore(){
+  const st = document.getElementById("storeStatus");
+  const body = document.getElementById("storeBody");
+  st.className = "status"; st.textContent = "Загружаю…";
+  body.innerHTML = "";
+  try{
+    const res = await fetch(`${db()}/meta.json`);
+    if(!res.ok) throw new Error("HTTP " + res.status);
+    const meta = await res.json() || {};
+    const rows = Object.entries(meta)
+      .map(([code, m]) => ({ code, t: m.t || 0, s: m.s || 0, n: m.n || 0 }))
+      .sort((a, b) => b.t - a.t);
+    if(!rows.length){
+      st.textContent = "Пусто. Пакеты, созданные до этого обновления, в списке не видны - их можно глянуть в консоли Firebase.";
+      return;
+    }
+    st.textContent = "";
+    const total = rows.reduce((s, r) => s + r.s, 0);
+
+    const info = document.createElement("div");
+    info.className = "meta"; info.style.marginBottom = "10px";
+    info.textContent = `${rows.length} пакет(ов) · всего ${human(total)} · старше ${TTL_DAYS} дней удаляются сами`;
+    body.appendChild(info);
+
+    const tbl = document.createElement("table");
+    tbl.className = "store";
+    tbl.innerHTML = "<thead><tr><th>Код</th><th>Создан</th><th>Размер</th><th></th></tr></thead>";
+    const tb = document.createElement("tbody");
+    rows.forEach(r => {
+      const tr = document.createElement("tr");
+      const d = new Date(r.t);
+      const pad = x => String(x).padStart(2, "0");
+      const dateStr = r.t ? `${pad(d.getDate())}.${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}` : "-";
+      tr.innerHTML = `<td><span class="code">${r.code}</span></td><td class="num">${dateStr}</td><td class="num">${human(r.s)}</td>`;
+      tr.querySelector(".code").onclick = () => { showView("get"); doLoad(r.code); };
+      const td = document.createElement("td");
+      td.style.textAlign = "right";
+      const del = document.createElement("button");
+      del.className = "minidel"; del.textContent = "×"; del.title = "удалить пакет";
+      del.onclick = async () => {
+        del.disabled = true;
+        try{ await deletePkg(r.code); tr.remove(); }
+        catch(e){ del.disabled = false; }
+      };
+      td.appendChild(del);
+      tr.appendChild(td);
+      tb.appendChild(tr);
+    });
+    tbl.appendChild(tb);
+    body.appendChild(tbl);
+
+    const wipe = document.createElement("button");
+    wipe.className = "btn ghost";
+    wipe.style.cssText = "border:0;color:var(--muted);padding:10px 0 0";
+    wipe.textContent = "Удалить всё";
+    wipe.onclick = async () => {
+      if(!confirm("Удалить все пакеты из облака?")) return;
+      wipe.disabled = true;
+      for(const r of rows){ try{ await deletePkg(r.code); }catch(e){} }
+      loadStore();
+    };
+    body.appendChild(wipe);
+  }catch(err){
+    st.className = "status err";
+    st.textContent = "Не открылось: " + err.message + ". Скорее всего, в Firebase не обновлены правила (см. README).";
+  }
+}
+
+/* Ленивая уборка: раз в сутки с одного из открытых устройств сносим пакеты старше TTL */
+async function sweep(){
+  const last = +localStorage.getItem("garna_share_sweep") || 0;
+  if(Date.now() - last < 86400000) return;
+  localStorage.setItem("garna_share_sweep", Date.now());
+  try{
+    const res = await fetch(`${db()}/meta.json`);
+    if(!res.ok) return;
+    const meta = await res.json() || {};
+    const cutoff = Date.now() - TTL_DAYS * 86400000;
+    const old = Object.entries(meta).filter(([, m]) => (m.t || 0) < cutoff).slice(0, 20);
+    for(const [code] of old){ await deletePkg(code).catch(()=>{}); }
+  }catch(e){}
+}
+
+/* Минимальный QR-кодировщик: байтовый режим, уровень коррекции M, версии 1-10.
+   Хватает для ссылок; внешние библиотеки не нужны. */
+function qrMatrix(text){
+  const EC = { // версия: [ec на блок, [блоков, данных], [блоков, данных]]
+    1:[10,[1,16]], 2:[16,[1,28]], 3:[26,[1,44]], 4:[18,[2,32]], 5:[24,[2,43]],
+    6:[16,[4,27]], 7:[18,[4,31]], 8:[22,[2,38],[2,39]], 9:[22,[3,36],[2,37]],
+    10:[26,[4,43],[1,44]]
+  };
+  const ALIGN = {1:[],2:[6,18],3:[6,22],4:[6,26],5:[6,30],6:[6,34],
+                 7:[6,22,38],8:[6,24,42],9:[6,26,46],10:[6,28,50]};
+
+  // --- utf8 ---
+  const data = [];
+  for(const b of new TextEncoder().encode(text)) data.push(b);
+
+  // --- выбор версии ---
+  let ver = 0, spec = null;
+  for(let v = 1; v <= 10; v++){
+    const s = EC[v];
+    let cap = 0;
+    for(let g = 1; g < s.length; g++) cap += s[g][0] * s[g][1];
+    const lenBits = v < 10 ? 8 : 16;
+    if(cap * 8 >= 4 + lenBits + data.length * 8){ ver = v; spec = s; break; }
+  }
+  if(!ver) return null;                        // слишком длинно - вызывающий покажет ссылку
+
+  // --- битовый поток ---
+  const bits = [];
+  const put = (val, len) => { for(let i = len - 1; i >= 0; i--) bits.push((val >> i) & 1); };
+  put(4, 4);
+  put(data.length, ver < 10 ? 8 : 16);
+  data.forEach(b => put(b, 8));
+
+  let totalData = 0;
+  for(let g = 1; g < spec.length; g++) totalData += spec[g][0] * spec[g][1];
+  const cap = totalData * 8;
+  for(let i = 0; i < 4 && bits.length < cap; i++) bits.push(0);
+  while(bits.length % 8) bits.push(0);
+  const cw = [];
+  for(let i = 0; i < bits.length; i += 8){
+    let b = 0;
+    for(let j = 0; j < 8; j++) b = (b << 1) | bits[i + j];
+    cw.push(b);
+  }
+  const PAD = [0xEC, 0x11];
+  for(let i = 0; cw.length < totalData; i++) cw.push(PAD[i % 2]);
+
+  // --- GF(256) ---
+  const EXP = new Uint8Array(512), LOG = new Uint8Array(256);
+  for(let i = 0, x = 1; i < 255; i++){
+    EXP[i] = x; LOG[x] = i;
+    x <<= 1; if(x & 0x100) x ^= 0x11D;
+  }
+  for(let i = 255; i < 512; i++) EXP[i] = EXP[i - 255];
+  const mul = (a, b) => (a && b) ? EXP[LOG[a] + LOG[b]] : 0;
+
+  const genPoly = n => {
+    let g = [1];
+    for(let i = 0; i < n; i++){
+      const ng = new Array(g.length + 1).fill(0);
+      for(let j = 0; j < g.length; j++){
+        ng[j] ^= mul(g[j], EXP[i]);
+        ng[j + 1] ^= g[j];
+      }
+      g = ng;
+    }
+    return g.reverse();          // старший коэффициент первым
+  };
+  const ecLen = spec[0], gen = genPoly(ecLen);
+  const rs = block => {
+    const res = new Array(ecLen).fill(0);
+    for(const b of block){
+      const factor = b ^ res[0];
+      res.shift(); res.push(0);
+      if(factor) for(let i = 0; i < ecLen; i++) res[i] ^= mul(gen[i + 1], factor);
+    }
+    return res;
+  };
+
+  // --- блоки ---
+  const dBlocks = [], eBlocks = [];
+  let pos = 0;
+  for(let g = 1; g < spec.length; g++){
+    const [cnt, len] = spec[g];
+    for(let i = 0; i < cnt; i++){
+      const blk = cw.slice(pos, pos + len); pos += len;
+      dBlocks.push(blk); eBlocks.push(rs(blk));
+    }
+  }
+  const finalCw = [];
+  const maxD = Math.max(...dBlocks.map(b => b.length));
+  for(let i = 0; i < maxD; i++) dBlocks.forEach(b => { if(i < b.length) finalCw.push(b[i]); });
+  for(let i = 0; i < ecLen; i++) eBlocks.forEach(b => finalCw.push(b[i]));
+
+  // --- канва ---
+  const size = 17 + ver * 4;
+  const m = Array.from({ length: size }, () => new Array(size).fill(null)); // null = свободно
+  const setF = (r, c, v) => { if(r >= 0 && r < size && c >= 0 && c < size) m[r][c] = v; };
+
+  const finder = (r, c) => {
+    for(let i = -1; i <= 7; i++) for(let j = -1; j <= 7; j++){
+      const on = (i >= 0 && i <= 6 && (j === 0 || j === 6)) ||
+                 (j >= 0 && j <= 6 && (i === 0 || i === 6)) ||
+                 (i >= 2 && i <= 4 && j >= 2 && j <= 4);
+      setF(r + i, c + j, on ? 1 : 0);
+    }
+  };
+  finder(0, 0); finder(0, size - 7); finder(size - 7, 0);
+
+  for(let i = 8; i < size - 8; i++){ m[6][i] = i % 2 === 0 ? 1 : 0; m[i][6] = i % 2 === 0 ? 1 : 0; }
+
+  const ac = ALIGN[ver];
+  for(const r of ac) for(const c of ac){
+    if((r <= 8 && c <= 8) || (r <= 8 && c >= size - 9) || (r >= size - 9 && c <= 8)) continue;
+    for(let i = -2; i <= 2; i++) for(let j = -2; j <= 2; j++){
+      const on = Math.max(Math.abs(i), Math.abs(j)) !== 1;
+      m[r + i][c + j] = on ? 1 : 0;
+    }
+  }
+
+  m[size - 8][8] = 1;                                   // тёмный модуль
+
+  // зарезервировать зоны формата
+  for(let i = 0; i < 9; i++){
+    if(m[8][i] === null) m[8][i] = 0;
+    if(m[i][8] === null) m[i][8] = 0;
+  }
+  for(let i = 0; i < 8; i++){
+    if(m[8][size - 1 - i] === null) m[8][size - 1 - i] = 0;
+    if(m[size - 1 - i][8] === null) m[size - 1 - i][8] = 0;
+  }
+  const reserved = m.map(row => row.map(v => v !== null));
+
+  // версия (7+)
+  if(ver >= 7){
+    let d = ver << 12, v = ver << 12;
+    for(let i = 0; i < 6; i++) if(d >> (17 - i) & 1) d ^= 0x1F25 << (5 - i);
+    const vi = v | d;
+    for(let i = 0; i < 18; i++){
+      const bit = (vi >> i) & 1;
+      m[Math.floor(i / 3)][size - 11 + i % 3] = bit;
+      m[size - 11 + i % 3][Math.floor(i / 3)] = bit;
+      reserved[Math.floor(i / 3)][size - 11 + i % 3] = true;
+      reserved[size - 11 + i % 3][Math.floor(i / 3)] = true;
+    }
+  }
+
+  // --- размещение данных ---
+  const bitStream = [];
+  finalCw.forEach(b => { for(let i = 7; i >= 0; i--) bitStream.push((b >> i) & 1); });
+  let bi = 0, up = true;
+  for(let col = size - 1; col > 0; col -= 2){
+    if(col === 6) col--;
+    for(let k = 0; k < size; k++){
+      const row = up ? size - 1 - k : k;
+      for(let c = 0; c < 2; c++){
+        const cc = col - c;
+        if(reserved[row][cc]) continue;
+        m[row][cc] = bi < bitStream.length ? bitStream[bi++] : 0;
+      }
+    }
+    up = !up;
+  }
+
+  // --- маски ---
+  const MASK = [
+    (r,c)=>(r+c)%2===0, (r,c)=>r%2===0, (r,c)=>c%3===0, (r,c)=>(r+c)%3===0,
+    (r,c)=>(Math.floor(r/2)+Math.floor(c/3))%2===0, (r,c)=>(r*c)%2+(r*c)%3===0,
+    (r,c)=>((r*c)%2+(r*c)%3)%2===0, (r,c)=>((r+c)%2+(r*c)%3)%2===0
+  ];
+  const penalty = g => {
+    const n = g.length; let p = 0;
+    for(let r = 0; r < n; r++){
+      let run = 1;
+      for(let c = 1; c < n; c++){
+        if(g[r][c] === g[r][c-1]) run++; else { if(run >= 5) p += run - 2; run = 1; }
+      }
+      if(run >= 5) p += run - 2;
+    }
+    for(let c = 0; c < n; c++){
+      let run = 1;
+      for(let r = 1; r < n; r++){
+        if(g[r][c] === g[r-1][c]) run++; else { if(run >= 5) p += run - 2; run = 1; }
+      }
+      if(run >= 5) p += run - 2;
+    }
+    for(let r = 0; r < n-1; r++) for(let c = 0; c < n-1; c++){
+      const v = g[r][c];
+      if(v === g[r][c+1] && v === g[r+1][c] && v === g[r+1][c+1]) p += 3;
+    }
+    const pat = [1,0,1,1,1,0,1,0,0,0,0];
+    const pat2 = [0,0,0,0,1,0,1,1,1,0,1];
+    const check = arr => {
+      let hit = 0;
+      for(let i = 0; i + 11 <= arr.length; i++){
+        let ok1 = true, ok2 = true;
+        for(let j = 0; j < 11; j++){
+          if(arr[i+j] !== pat[j]) ok1 = false;
+          if(arr[i+j] !== pat2[j]) ok2 = false;
+        }
+        if(ok1 || ok2) hit++;
+      }
+      return hit * 40;
+    };
+    for(let r = 0; r < n; r++) p += check(g[r]);
+    for(let c = 0; c < n; c++) p += check(g.map(row => row[c]));
+    let dark = 0;
+    g.forEach(row => row.forEach(v => dark += v));
+    const pct = dark * 100 / (n * n);
+    p += Math.floor(Math.abs(pct - 50) / 5) * 10;
+    return p;
+  };
+
+  const fmtBits = mask => {
+    const ecBits = 0;                              // уровень M
+    const d = (ecBits << 3) | mask;
+    let rem = d << 10;
+    for(let i = 0; i < 5; i++) if(rem >> (14 - i) & 1) rem ^= 0x537 << (4 - i);
+    return ((d << 10) | rem) ^ 0x5412;
+  };
+
+  let best = null, bestScore = Infinity;
+  for(let mask = 0; mask < 8; mask++){
+    const g = m.map((row, r) => row.map((v, c) => reserved[r][c] ? v : (MASK[mask](r, c) ? v ^ 1 : v)));
+    const f = fmtBits(mask);
+    for(let i = 0; i < 15; i++){
+      const bit = (f >> i) & 1;
+      const rev = (f >> (14 - i)) & 1;             // копия 1 читается в обратном порядке
+      if(i < 6) g[8][i] = rev;
+      else if(i === 6) g[8][7] = rev;
+      else if(i === 7) g[8][8] = rev;
+      else if(i === 8) g[7][8] = rev;
+      else g[14 - i][8] = rev;
+
+      if(i < 8) g[8][size - 1 - i] = bit;          // строка 8 справа, 8 модулей
+      else g[size - 15 + i][8] = bit;              // столбец 8 снизу, 7 модулей
+    }
+    g[size - 8][8] = 1;
+    const sc = penalty(g);
+    if(sc < bestScore){ bestScore = sc; best = g; }
+  }
+  return best;
+}
+
+/* SVG для QR: один path на все тёмные модули */
+function qrSVG(text){
+  const m = qrMatrix(text);
+  if(!m) return "";
+  const n = m.length, q = 3, size = n + q * 2;
+  let d = "";
+  for(let r = 0; r < n; r++){
+    let c = 0;
+    while(c < n){
+      if(!m[r][c]){ c++; continue; }
+      let len = 0;
+      while(c + len < n && m[r][c + len]) len++;
+      d += "M" + (c + q) + " " + (r + q) + "h" + len + "v1h-" + len + "z";
+      c += len;
+    }
+  }
+  return '<svg viewBox="0 0 ' + size + ' ' + size + '" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" role="img" aria-label="QR-код со ссылкой на пакет"><rect width="' + size + '" height="' + size + '" fill="#fff"/><path d="' + d + '" fill="#101713"/></svg>';
+}
+
 /* ---------- init ---------- */
 try{ document.execCommand("defaultParagraphSeparator", false, "p"); }catch(e){}
 addTextBlock("");
 renderRecent();
 updateMeta();
+sweep();
 const fromUrl = new URLSearchParams(location.search).get("c");
 if(fromUrl){
   showView("get");
   codeInput.value = fromUrl.toUpperCase();
-  if(db()) doLoad(fromUrl);
+  doLoad(fromUrl);
 }else{
   showView("send");
 }
