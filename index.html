@@ -766,7 +766,9 @@ function renderCode(code){
     c.className = "cell"; c.textContent = ch;
     cells.appendChild(c);
   });
-  document.getElementById("qrBox").innerHTML = qrSVG(shareUrl(code));
+  const qb = document.getElementById("qrBox");
+  try{ qb.innerHTML = qrSVG(shareUrl(code)); }
+  catch(e){ qb.innerHTML = ""; console.error("QR:", e); }
 }
 
 function shareUrl(code){ return location.origin + location.pathname + "?c=" + code; }
@@ -1161,6 +1163,269 @@ async function loadStore(){
     st.className = "status err";
     st.textContent = "Не открылось: " + err.message + ". Проверь правила базы (см. README).";
   }
+}
+
+/* Минимальный QR-кодировщик: байтовый режим, уровень коррекции M, версии 1-10.
+   Хватает для ссылок; внешние библиотеки не нужны. */
+function qrMatrix(text){
+  const EC = { // версия: [ec на блок, [блоков, данных], [блоков, данных]]
+    1:[10,[1,16]], 2:[16,[1,28]], 3:[26,[1,44]], 4:[18,[2,32]], 5:[24,[2,43]],
+    6:[16,[4,27]], 7:[18,[4,31]], 8:[22,[2,38],[2,39]], 9:[22,[3,36],[2,37]],
+    10:[26,[4,43],[1,44]]
+  };
+  const ALIGN = {1:[],2:[6,18],3:[6,22],4:[6,26],5:[6,30],6:[6,34],
+                 7:[6,22,38],8:[6,24,42],9:[6,26,46],10:[6,28,50]};
+
+  // --- utf8 ---
+  const data = [];
+  for(const b of new TextEncoder().encode(text)) data.push(b);
+
+  // --- выбор версии ---
+  let ver = 0, spec = null;
+  for(let v = 1; v <= 10; v++){
+    const s = EC[v];
+    let cap = 0;
+    for(let g = 1; g < s.length; g++) cap += s[g][0] * s[g][1];
+    const lenBits = v < 10 ? 8 : 16;
+    if(cap * 8 >= 4 + lenBits + data.length * 8){ ver = v; spec = s; break; }
+  }
+  if(!ver) return null;                        // слишком длинно - вызывающий покажет ссылку
+
+  // --- битовый поток ---
+  const bits = [];
+  const put = (val, len) => { for(let i = len - 1; i >= 0; i--) bits.push((val >> i) & 1); };
+  put(4, 4);
+  put(data.length, ver < 10 ? 8 : 16);
+  data.forEach(b => put(b, 8));
+
+  let totalData = 0;
+  for(let g = 1; g < spec.length; g++) totalData += spec[g][0] * spec[g][1];
+  const cap = totalData * 8;
+  for(let i = 0; i < 4 && bits.length < cap; i++) bits.push(0);
+  while(bits.length % 8) bits.push(0);
+  const cw = [];
+  for(let i = 0; i < bits.length; i += 8){
+    let b = 0;
+    for(let j = 0; j < 8; j++) b = (b << 1) | bits[i + j];
+    cw.push(b);
+  }
+  const PAD = [0xEC, 0x11];
+  for(let i = 0; cw.length < totalData; i++) cw.push(PAD[i % 2]);
+
+  // --- GF(256) ---
+  const EXP = new Uint8Array(512), LOG = new Uint8Array(256);
+  for(let i = 0, x = 1; i < 255; i++){
+    EXP[i] = x; LOG[x] = i;
+    x <<= 1; if(x & 0x100) x ^= 0x11D;
+  }
+  for(let i = 255; i < 512; i++) EXP[i] = EXP[i - 255];
+  const mul = (a, b) => (a && b) ? EXP[LOG[a] + LOG[b]] : 0;
+
+  const genPoly = n => {
+    let g = [1];
+    for(let i = 0; i < n; i++){
+      const ng = new Array(g.length + 1).fill(0);
+      for(let j = 0; j < g.length; j++){
+        ng[j] ^= mul(g[j], EXP[i]);
+        ng[j + 1] ^= g[j];
+      }
+      g = ng;
+    }
+    return g.reverse();          // старший коэффициент первым
+  };
+  const ecLen = spec[0], gen = genPoly(ecLen);
+  const rs = block => {
+    const res = new Array(ecLen).fill(0);
+    for(const b of block){
+      const factor = b ^ res[0];
+      res.shift(); res.push(0);
+      if(factor) for(let i = 0; i < ecLen; i++) res[i] ^= mul(gen[i + 1], factor);
+    }
+    return res;
+  };
+
+  // --- блоки ---
+  const dBlocks = [], eBlocks = [];
+  let pos = 0;
+  for(let g = 1; g < spec.length; g++){
+    const [cnt, len] = spec[g];
+    for(let i = 0; i < cnt; i++){
+      const blk = cw.slice(pos, pos + len); pos += len;
+      dBlocks.push(blk); eBlocks.push(rs(blk));
+    }
+  }
+  const finalCw = [];
+  const maxD = Math.max(...dBlocks.map(b => b.length));
+  for(let i = 0; i < maxD; i++) dBlocks.forEach(b => { if(i < b.length) finalCw.push(b[i]); });
+  for(let i = 0; i < ecLen; i++) eBlocks.forEach(b => finalCw.push(b[i]));
+
+  // --- канва ---
+  const size = 17 + ver * 4;
+  const m = Array.from({ length: size }, () => new Array(size).fill(null)); // null = свободно
+  const setF = (r, c, v) => { if(r >= 0 && r < size && c >= 0 && c < size) m[r][c] = v; };
+
+  const finder = (r, c) => {
+    for(let i = -1; i <= 7; i++) for(let j = -1; j <= 7; j++){
+      const on = (i >= 0 && i <= 6 && (j === 0 || j === 6)) ||
+                 (j >= 0 && j <= 6 && (i === 0 || i === 6)) ||
+                 (i >= 2 && i <= 4 && j >= 2 && j <= 4);
+      setF(r + i, c + j, on ? 1 : 0);
+    }
+  };
+  finder(0, 0); finder(0, size - 7); finder(size - 7, 0);
+
+  for(let i = 8; i < size - 8; i++){ m[6][i] = i % 2 === 0 ? 1 : 0; m[i][6] = i % 2 === 0 ? 1 : 0; }
+
+  const ac = ALIGN[ver];
+  for(const r of ac) for(const c of ac){
+    if((r <= 8 && c <= 8) || (r <= 8 && c >= size - 9) || (r >= size - 9 && c <= 8)) continue;
+    for(let i = -2; i <= 2; i++) for(let j = -2; j <= 2; j++){
+      const on = Math.max(Math.abs(i), Math.abs(j)) !== 1;
+      m[r + i][c + j] = on ? 1 : 0;
+    }
+  }
+
+  m[size - 8][8] = 1;                                   // тёмный модуль
+
+  // зарезервировать зоны формата
+  for(let i = 0; i < 9; i++){
+    if(m[8][i] === null) m[8][i] = 0;
+    if(m[i][8] === null) m[i][8] = 0;
+  }
+  for(let i = 0; i < 8; i++){
+    if(m[8][size - 1 - i] === null) m[8][size - 1 - i] = 0;
+    if(m[size - 1 - i][8] === null) m[size - 1 - i][8] = 0;
+  }
+  const reserved = m.map(row => row.map(v => v !== null));
+
+  // версия (7+)
+  if(ver >= 7){
+    let d = ver << 12, v = ver << 12;
+    for(let i = 0; i < 6; i++) if(d >> (17 - i) & 1) d ^= 0x1F25 << (5 - i);
+    const vi = v | d;
+    for(let i = 0; i < 18; i++){
+      const bit = (vi >> i) & 1;
+      m[Math.floor(i / 3)][size - 11 + i % 3] = bit;
+      m[size - 11 + i % 3][Math.floor(i / 3)] = bit;
+      reserved[Math.floor(i / 3)][size - 11 + i % 3] = true;
+      reserved[size - 11 + i % 3][Math.floor(i / 3)] = true;
+    }
+  }
+
+  // --- размещение данных ---
+  const bitStream = [];
+  finalCw.forEach(b => { for(let i = 7; i >= 0; i--) bitStream.push((b >> i) & 1); });
+  let bi = 0, up = true;
+  for(let col = size - 1; col > 0; col -= 2){
+    if(col === 6) col--;
+    for(let k = 0; k < size; k++){
+      const row = up ? size - 1 - k : k;
+      for(let c = 0; c < 2; c++){
+        const cc = col - c;
+        if(reserved[row][cc]) continue;
+        m[row][cc] = bi < bitStream.length ? bitStream[bi++] : 0;
+      }
+    }
+    up = !up;
+  }
+
+  // --- маски ---
+  const MASK = [
+    (r,c)=>(r+c)%2===0, (r,c)=>r%2===0, (r,c)=>c%3===0, (r,c)=>(r+c)%3===0,
+    (r,c)=>(Math.floor(r/2)+Math.floor(c/3))%2===0, (r,c)=>(r*c)%2+(r*c)%3===0,
+    (r,c)=>((r*c)%2+(r*c)%3)%2===0, (r,c)=>((r+c)%2+(r*c)%3)%2===0
+  ];
+  const penalty = g => {
+    const n = g.length; let p = 0;
+    for(let r = 0; r < n; r++){
+      let run = 1;
+      for(let c = 1; c < n; c++){
+        if(g[r][c] === g[r][c-1]) run++; else { if(run >= 5) p += run - 2; run = 1; }
+      }
+      if(run >= 5) p += run - 2;
+    }
+    for(let c = 0; c < n; c++){
+      let run = 1;
+      for(let r = 1; r < n; r++){
+        if(g[r][c] === g[r-1][c]) run++; else { if(run >= 5) p += run - 2; run = 1; }
+      }
+      if(run >= 5) p += run - 2;
+    }
+    for(let r = 0; r < n-1; r++) for(let c = 0; c < n-1; c++){
+      const v = g[r][c];
+      if(v === g[r][c+1] && v === g[r+1][c] && v === g[r+1][c+1]) p += 3;
+    }
+    const pat = [1,0,1,1,1,0,1,0,0,0,0];
+    const pat2 = [0,0,0,0,1,0,1,1,1,0,1];
+    const check = arr => {
+      let hit = 0;
+      for(let i = 0; i + 11 <= arr.length; i++){
+        let ok1 = true, ok2 = true;
+        for(let j = 0; j < 11; j++){
+          if(arr[i+j] !== pat[j]) ok1 = false;
+          if(arr[i+j] !== pat2[j]) ok2 = false;
+        }
+        if(ok1 || ok2) hit++;
+      }
+      return hit * 40;
+    };
+    for(let r = 0; r < n; r++) p += check(g[r]);
+    for(let c = 0; c < n; c++) p += check(g.map(row => row[c]));
+    let dark = 0;
+    g.forEach(row => row.forEach(v => dark += v));
+    const pct = dark * 100 / (n * n);
+    p += Math.floor(Math.abs(pct - 50) / 5) * 10;
+    return p;
+  };
+
+  const fmtBits = mask => {
+    const ecBits = 0;                              // уровень M
+    const d = (ecBits << 3) | mask;
+    let rem = d << 10;
+    for(let i = 0; i < 5; i++) if(rem >> (14 - i) & 1) rem ^= 0x537 << (4 - i);
+    return ((d << 10) | rem) ^ 0x5412;
+  };
+
+  let best = null, bestScore = Infinity;
+  for(let mask = 0; mask < 8; mask++){
+    const g = m.map((row, r) => row.map((v, c) => reserved[r][c] ? v : (MASK[mask](r, c) ? v ^ 1 : v)));
+    const f = fmtBits(mask);
+    for(let i = 0; i < 15; i++){
+      const bit = (f >> i) & 1;
+      const rev = (f >> (14 - i)) & 1;             // копия 1 читается в обратном порядке
+      if(i < 6) g[8][i] = rev;
+      else if(i === 6) g[8][7] = rev;
+      else if(i === 7) g[8][8] = rev;
+      else if(i === 8) g[7][8] = rev;
+      else g[14 - i][8] = rev;
+
+      if(i < 8) g[8][size - 1 - i] = bit;          // строка 8 справа, 8 модулей
+      else g[size - 15 + i][8] = bit;              // столбец 8 снизу, 7 модулей
+    }
+    g[size - 8][8] = 1;
+    const sc = penalty(g);
+    if(sc < bestScore){ bestScore = sc; best = g; }
+  }
+  return best;
+}
+
+/* SVG для QR: один path на все тёмные модули */
+function qrSVG(text){
+  const m = qrMatrix(text);
+  if(!m) return "";
+  const n = m.length, q = 3, size = n + q * 2;
+  let d = "";
+  for(let r = 0; r < n; r++){
+    let c = 0;
+    while(c < n){
+      if(!m[r][c]){ c++; continue; }
+      let len = 0;
+      while(c + len < n && m[r][c + len]) len++;
+      d += "M" + (c + q) + " " + (r + q) + "h" + len + "v1h-" + len + "z";
+      c += len;
+    }
+  }
+  return '<svg viewBox="0 0 ' + size + ' ' + size + '" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" role="img" aria-label="QR-код со ссылкой на пакет"><rect width="' + size + '" height="' + size + '" fill="#fff"/><path d="' + d + '" fill="#101713"/></svg>';
 }
 
 /* ---------- init ---------- */
